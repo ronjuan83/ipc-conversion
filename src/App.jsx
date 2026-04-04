@@ -330,7 +330,89 @@ function ReceivedSection({ received, onSearch, ipcGroups }) {
   )
 }
 
-function SubclassCard({ code, data, onSearch, onFlowView, ipcGroups }) {
+// Inline flow summary shown directly in SubclassCard
+function FlowSummary({ code, flowGraph, data, onSearch, onFlowView }) {
+  if (!flowGraph) return null
+  const isSubclass = /^[A-H]\d{2}[A-Z]$/.test(code)
+  const rawFlow = isSubclass
+    ? traceSubclassFlow(code, flowGraph, data.subclass_index)
+    : traceFlow(code, flowGraph)
+  if (rawFlow.edges.length === 0) return null
+
+  const originSub = code.slice(0, 4)
+  const relevantEdges = rawFlow.edges.filter(e => {
+    const fromSub = e.from.slice(0, 4)
+    const toSub = e.to.slice(0, 4)
+    return fromSub === originSub || toSub === originSub
+  })
+  if (relevantEdges.length === 0) return null
+
+  // Group by version → subclass pairs
+  const byVersion = {}
+  relevantEdges.forEach(e => {
+    if (!byVersion[e.version]) byVersion[e.version] = []
+    byVersion[e.version].push(e)
+  })
+  const sortedVersions = Object.keys(byVersion).sort((a, b) => versionOrder(a) - versionOrder(b))
+
+  const palette = ['#0d6efd', '#dc3545', '#198754', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c', '#6610f2', '#ffc107', '#17a2b8']
+  const allSubs = new Set()
+  relevantEdges.forEach(e => { allSubs.add(e.from.slice(0, 4)); allSubs.add(e.to.slice(0, 4)) })
+  const subColors = {}
+  let ci = 0
+  ;[...allSubs].sort().forEach(s => { subColors[s] = palette[ci++ % palette.length] })
+
+  return (
+    <div className="flow-summary-section">
+      <div className="flow-summary-header">
+        <span className="section-icon">⟷</span>
+        跨版本流變摘要
+        <span className="count-badge">{relevantEdges.length} 筆異動、{sortedVersions.length} 個版本</span>
+        {onFlowView && <button className="flow-btn" style={{ marginLeft: 'auto' }} onClick={() => onFlowView(code)}>展開詳情</button>}
+      </div>
+      <div className="flow-summary-body">
+        {sortedVersions.map(ver => {
+          const edges = byVersion[ver]
+          const subFlows = {}
+          edges.forEach(e => {
+            const fromSub = e.from.slice(0, 4)
+            const toSub = e.to.slice(0, 4)
+            if (fromSub === toSub) return
+            const key = `${fromSub}→${toSub}`
+            if (!subFlows[key]) subFlows[key] = { fromSub, toSub, count: 0 }
+            subFlows[key].count++
+          })
+          const entries = Object.values(subFlows)
+          if (entries.length === 0) return null
+
+          return (
+            <div key={ver} className="flow-summary-ver">
+              <span className="flow-summary-ver-label">{ver}</span>
+              <div className="flow-summary-flows">
+                {entries.map((sf, i) => {
+                  const isOut = sf.fromSub === originSub
+                  return (
+                    <span key={i} className="flow-summary-item">
+                      <span className={`tl-direction ${isOut ? 'out' : 'in'}`}>{isOut ? '捐出' : '移入'}</span>
+                      <span className="flow-sub-chip" style={{ borderColor: subColors[sf.fromSub], color: subColors[sf.fromSub], fontSize: '0.75rem', padding: '1px 5px' }}
+                            onClick={() => onSearch(sf.fromSub)}>{sf.fromSub}</span>
+                      <span style={{ color: '#adb5bd', fontSize: '0.75rem' }}>→</span>
+                      <span className="flow-sub-chip" style={{ borderColor: subColors[sf.toSub], color: subColors[sf.toSub], fontSize: '0.75rem', padding: '1px 5px' }}
+                            onClick={() => onSearch(sf.toSub)}>{sf.toSub}</span>
+                      <span style={{ fontSize: '0.7rem', color: '#6c757d' }}>{sf.count}</span>
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function SubclassCard({ code, data, onSearch, onFlowView, ipcGroups, flowGraph }) {
   const entry = data.subclass_index[code] || {}
   const donated = entry.donated || []
   const received = entry.received || []
@@ -370,6 +452,8 @@ function SubclassCard({ code, data, onSearch, onFlowView, ipcGroups }) {
           {deprAt && <span className="info-note">（於 {deprAt} 版廢棄）</span>}
         </div>
       )}
+
+      <FlowSummary code={code} flowGraph={flowGraph} data={data} onSearch={onSearch} onFlowView={onFlowView} />
 
       {donated.length === 0 && received.length === 0 ? (
         <div className="no-moves">此分類在現有記錄中無跨分類異動。</div>
@@ -1366,7 +1450,7 @@ export default function App() {
             />
           )}
           {!loading && !error && !flowCode && result && result.type === 'exact' && (
-            <SubclassCard code={result.code} data={data} onSearch={handleSearch} onFlowView={setFlowCode} ipcGroups={ipcGroups} />
+            <SubclassCard code={result.code} data={data} onSearch={handleSearch} onFlowView={setFlowCode} ipcGroups={ipcGroups} flowGraph={flowGraph} />
           )}
           {!loading && !error && !flowCode && result && result.type === 'prefix' && (
             <PrefixList prefix={result.prefix} data={data} onSearch={handleSearch} />

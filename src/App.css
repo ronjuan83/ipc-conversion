@@ -744,6 +744,50 @@ body {
   background: var(--version-bg);
 }
 
+/* ── Flow Summary (inline in SubclassCard) ── */
+.flow-summary-section {
+  border-bottom: 1px solid var(--border-light);
+}
+.flow-summary-header {
+  padding: 10px 20px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary);
+  background: var(--version-bg);
+  border-bottom: 1px solid var(--border-light);
+}
+.flow-summary-body {
+  padding: 8px 20px 12px;
+}
+.flow-summary-ver {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 4px 0;
+}
+.flow-summary-ver-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--version-color);
+  min-width: 120px;
+  padding-top: 3px;
+  flex-shrink: 0;
+}
+.flow-summary-flows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.flow-summary-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* ── Timeline Chart ── */
 .timeline-chart {
   padding: 0 20px 12px;
