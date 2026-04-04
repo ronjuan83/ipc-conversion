@@ -1131,6 +1131,7 @@ function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
         edges.forEach(e => {
           const fromSub = e.from.slice(0, 4)
           const toSub = e.to.slice(0, 4)
+          if (fromSub === toSub) return // skip same-subclass internal moves
           const key = `${fromSub}→${toSub}`
           if (!subFlows[key]) subFlows[key] = { fromSub, toSub, edges: [] }
           subFlows[key].edges.push(e)
