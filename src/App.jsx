@@ -986,7 +986,7 @@ function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <div className="sankey-toggle">
-            <button className={`toggle-btn ${flowView === 'list' ? 'active' : ''}`} onClick={() => setFlowView('list')}>列表</button>
+            <button className={`toggle-btn ${flowView === 'list' ? 'active' : ''}`} onClick={() => setFlowView('list')}>摘要</button>
             <button className={`toggle-btn ${flowView === 'tree' ? 'active' : ''}`} onClick={() => setFlowView('tree')}>時間軸</button>
           </div>
           <button className="flow-back-btn" onClick={onBack}>← 返回</button>
