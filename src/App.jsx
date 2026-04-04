@@ -512,6 +512,8 @@ function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph }) {
           expandedSections={expandedSections}
           toggleSection={toggleSection}
           onSearch={onSearch}
+          data={data}
+          ipcGroups={ipcGroups}
         />
       )}
     </div>
@@ -990,7 +992,7 @@ function computeSankeyLayout(flow, originCode) {
 
 // ── Timeline Chart: git-log style vertical timeline ──
 
-function TimelineChart({ sortedVersions, byVersion, originSub, subColors, expandedSections, toggleSection, onSearch }) {
+function TimelineChart({ sortedVersions, byVersion, originSub, subColors, expandedSections, toggleSection, onSearch, data, ipcGroups }) {
   return (
     <div className="timeline-chart">
       {sortedVersions.map(ver => {
@@ -1032,19 +1034,38 @@ function TimelineChart({ sortedVersions, byVersion, originSub, subColors, expand
                       <span className="tl-count">{sf.edges.length} 筆</span>
                       <span className={`flow-sub-toggle ${isOpen ? 'open' : ''}`}>▸</span>
                     </div>
-                    {isOpen && (
-                      <table className="move-table flow-detail-table">
-                        <thead><tr><th>原始組號</th><th>移入目的地</th></tr></thead>
-                        <tbody>
-                          {sf.edges.map((e, i) => (
-                            <tr key={i}>
-                              <td className="code-cell"><span className="code-link" onClick={() => onSearch(e.from)}>{e.from}</span></td>
-                              <td className="code-cell"><span className="code-link" onClick={() => onSearch(e.to)}>{e.to}</span></td>
+                    {isOpen && (() => {
+                      // Use original records from subclass_index instead of flowGraph edges
+                      const srcEntry = data.subclass_index[sf.fromSub] || {}
+                      const rawRecords = (srcEntry.donated || []).filter(r =>
+                        r.version === ver && r.dst && new RegExp(sf.toSub).test(r.dst)
+                      )
+                      return rawRecords.length > 0 ? (
+                        <table className="move-table flow-detail-table">
+                          <thead><tr><th>原始組號</th><th>移入目的地</th></tr></thead>
+                          <tbody>
+                            {rawRecords.map((r, i) => (
+                              <tr key={i}>
+                                <td className="code-cell"><DstCell dst={r.src_group} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
+                                <td className="code-cell"><DstCell dst={r.dst} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                    )}
+                      ) : (
+                        <table className="move-table flow-detail-table">
+                          <thead><tr><th>原始組號</th><th>移入目的地</th></tr></thead>
+                          <tbody>
+                            {sf.edges.map((e, i) => (
+                              <tr key={i}>
+                                <td className="code-cell"><span className="code-link" onClick={() => onSearch(e.from)}>{e.from}</span></td>
+                                <td className="code-cell"><span className="code-link" onClick={() => onSearch(e.to)}>{e.to}</span></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )
+                    })()}
                   </div>
                 )
               })}
