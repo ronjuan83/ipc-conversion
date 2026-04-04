@@ -464,7 +464,6 @@ function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph }) {
           {hasFlowData && flowGraph && (
             <div className="sankey-toggle">
               <button className={`toggle-btn ${viewTab === 'summary' ? 'active' : ''}`} onClick={() => setViewTab('summary')}>摘要</button>
-              <button className={`toggle-btn ${viewTab === 'list' ? 'active' : ''}`} onClick={() => setViewTab('list')}>列表</button>
               <button className={`toggle-btn ${viewTab === 'timeline' ? 'active' : ''}`} onClick={() => setViewTab('timeline')}>時間軸</button>
             </div>
           )}
@@ -491,70 +490,61 @@ function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph }) {
       {viewTab === 'summary' && (
         <>
           <FlowSummary code={code} flowGraph={flowGraph} data={data} onSearch={onSearch} />
-          {donated.length === 0 && received.length === 0 ? (
-            <div className="no-moves">此分類在現有記錄中無跨分類異動。</div>
-          ) : (
-            <>
-              <DonatedSection donated={donated} onSearch={onSearch} ipcGroups={ipcGroups} />
-              <ReceivedSection received={received} onSearch={onSearch} ipcGroups={ipcGroups} />
-            </>
-          )}
+          {sortedVersions.map(ver => {
+            const edges = byVersion[ver]
+            const subFlows = {}
+            edges.forEach(e => {
+              const fromSub = e.from.slice(0, 4)
+              const toSub = e.to.slice(0, 4)
+              if (fromSub === toSub) return
+              const key = `${fromSub}→${toSub}`
+              if (!subFlows[key]) subFlows[key] = { fromSub, toSub, edges: [] }
+              subFlows[key].edges.push(e)
+            })
+            const flowEntries = Object.entries(subFlows)
+            if (flowEntries.length === 0) return null
+            return (
+              <div key={ver} className="flow-ver-block">
+                <div className="flow-ver-header">{ver}</div>
+                <div className="flow-ver-body">
+                  {flowEntries.map(([key, sf]) => {
+                    const sectionKey = `${ver}|${key}`
+                    const isOpen = expandedSections[sectionKey]
+                    const fromColor = subColors[sf.fromSub] || '#999'
+                    const toColor = subColors[sf.toSub] || '#999'
+                    return (
+                      <div key={key} className="flow-sub-row">
+                        <div className="flow-sub-summary" onClick={() => toggleSection(sectionKey)}>
+                          <span className="flow-sub-chip" style={{ borderColor: fromColor, color: fromColor }}
+                                onClick={e => { e.stopPropagation(); onSearch(sf.fromSub) }}>{sf.fromSub}</span>
+                          <span className="flow-sub-arrow">→</span>
+                          <span className="flow-sub-chip" style={{ borderColor: toColor, color: toColor }}
+                                onClick={e => { e.stopPropagation(); onSearch(sf.toSub) }}>{sf.toSub}</span>
+                          <span className="flow-sub-count">{sf.edges.length} 筆</span>
+                          <span className={`flow-sub-toggle ${isOpen ? 'open' : ''}`}>▸</span>
+                        </div>
+                        {isOpen && (
+                          <table className="move-table flow-detail-table">
+                            <thead><tr><th>原始組號</th><th>移入目的地</th></tr></thead>
+                            <tbody>
+                              {sf.edges.map((e, i) => (
+                                <tr key={i}>
+                                  <td className="code-cell"><span className="code-link" onClick={() => onSearch(e.from)}>{e.from}</span></td>
+                                  <td className="code-cell"><span className="code-link" onClick={() => onSearch(e.to)}>{e.to}</span></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
         </>
       )}
-
-      {viewTab === 'list' && sortedVersions.map(ver => {
-        const edges = byVersion[ver]
-        const subFlows = {}
-        edges.forEach(e => {
-          const fromSub = e.from.slice(0, 4)
-          const toSub = e.to.slice(0, 4)
-          if (fromSub === toSub) return
-          const key = `${fromSub}→${toSub}`
-          if (!subFlows[key]) subFlows[key] = { fromSub, toSub, edges: [] }
-          subFlows[key].edges.push(e)
-        })
-        const flowEntries = Object.entries(subFlows)
-        if (flowEntries.length === 0) return null
-        return (
-          <div key={ver} className="flow-ver-block">
-            <div className="flow-ver-header">{ver}</div>
-            <div className="flow-ver-body">
-              {flowEntries.map(([key, sf]) => {
-                const sectionKey = `${ver}|${key}`
-                const isOpen = expandedSections[sectionKey]
-                const fromColor = subColors[sf.fromSub] || '#999'
-                const toColor = subColors[sf.toSub] || '#999'
-                return (
-                  <div key={key} className="flow-sub-row">
-                    <div className="flow-sub-summary" onClick={() => toggleSection(sectionKey)}>
-                      <span className="flow-sub-chip" style={{ borderColor: fromColor, color: fromColor }}
-                            onClick={e => { e.stopPropagation(); onSearch(sf.fromSub) }}>{sf.fromSub}</span>
-                      <span className="flow-sub-arrow">→</span>
-                      <span className="flow-sub-chip" style={{ borderColor: toColor, color: toColor }}
-                            onClick={e => { e.stopPropagation(); onSearch(sf.toSub) }}>{sf.toSub}</span>
-                      <span className="flow-sub-count">{sf.edges.length} 筆</span>
-                      <span className={`flow-sub-toggle ${isOpen ? 'open' : ''}`}>▸</span>
-                    </div>
-                    {isOpen && (
-                      <table className="move-table flow-detail-table">
-                        <thead><tr><th>原始組號</th><th>移入目的地</th></tr></thead>
-                        <tbody>
-                          {sf.edges.map((e, i) => (
-                            <tr key={i}>
-                              <td className="code-cell"><span className="code-link" onClick={() => onSearch(e.from)}>{e.from}</span></td>
-                              <td className="code-cell"><span className="code-link" onClick={() => onSearch(e.to)}>{e.to}</span></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
 
       {viewTab === 'timeline' && (
         <TimelineChart
