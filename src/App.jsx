@@ -1154,10 +1154,52 @@ export default function App() {
       if (groupIndex[normalized]) {
         result = { type: 'group-exact', code: normalized }
       } else {
-        const matches = Object.keys(groupIndex)
-          .filter(k => k.startsWith(normalized))
-          .sort()
-        result = { type: 'group-prefix', prefix: normalized, matches }
+        // Fallback: check if code falls within a range in subclass records
+        const sub = normalized.slice(0, 4)
+        const entry = data.subclass_index[sub]
+        if (entry) {
+          const fallbackEntries = []
+          const rangeRe = /([A-H]\d{2}[A-Z]\s+\d+\/\d+)\s*-\s*(\d+\/\d+)/g
+          const allRecs = [...(entry.donated || []), ...(entry.received || [])]
+          for (const rec of allRecs) {
+            const fields = [rec.dst, rec.src_group, rec.from].filter(Boolean)
+            for (const field of fields) {
+              let m
+              while ((m = rangeRe.exec(field)) !== null) {
+                const rangeStart = m[1]
+                const rangeEndGroup = m[2]
+                if (rangeStart.slice(0, 4) === sub) {
+                  // Check if normalized falls within this range
+                  const qGroup = normalized.split(/\s+/)[1]
+                  const sGroup = rangeStart.split(/\s+/)[1]
+                  if (qGroup >= sGroup && qGroup <= rangeEndGroup) {
+                    // Found a range containing this code
+                    const type = rec.src_group ? 'donated' : 'received'
+                    fallbackEntries.push({ type, subclass: sub, record: rec })
+                  }
+                }
+              }
+              rangeRe.lastIndex = 0
+            }
+          }
+          if (fallbackEntries.length > 0) {
+            // Deduplicate and inject into groupIndex for this session
+            const seen = new Set()
+            groupIndex[normalized] = fallbackEntries.filter(e => {
+              const key = JSON.stringify(e.record)
+              if (seen.has(key)) return false
+              seen.add(key)
+              return true
+            })
+            result = { type: 'group-exact', code: normalized }
+          }
+        }
+        if (!result) {
+          const matches = Object.keys(groupIndex)
+            .filter(k => k.startsWith(normalized))
+            .sort()
+          result = { type: 'group-prefix', prefix: normalized, matches }
+        }
       }
     } else {
       // Subclass-level search (existing logic)
