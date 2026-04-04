@@ -120,7 +120,7 @@ function DstCell({ dst, onSearch, ipcGroups }) {
       const next = segments[i + 1]
       if (next && !next.link && next.text.trim().startsWith('-') && ipcGroups) {
         const expanded = expandRange(seg.text, next.text.trim(), ipcGroups)
-        if (expanded && expanded.length > 1) {
+        if (expanded && expanded.length >= 1) {
           // Replace range with expanded individual codes
           result.push(
             <span key={i} className="expanded-range">
