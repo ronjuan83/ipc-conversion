@@ -1080,56 +1080,81 @@ function TimelineChart({ sortedVersions, byVersion, originSub, subColors, expand
   )
 }
 
-// ── Tech Classifier: fuzzy match tech description → IPC code ──
+// ── Tech Classifier: fuzzy match tech description → IPC group code ──
 
 function TechClassifier({ onSearch }) {
   const [techInput, setTechInput] = useState('')
+  const [groupTitles, setGroupTitles] = useState(null)
   const [techKeywords, setTechKeywords] = useState(null)
   const [suggestions, setSuggestions] = useState([])
 
   useEffect(() => {
+    // Load group-level titles (7800+ main groups from WIPO XML)
+    fetch(`${import.meta.env.BASE_URL}ipc_group_titles.json`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setGroupTitles(d) })
+      .catch(() => {})
+    // Load tech keywords (503 subclass-level keyword sets)
     fetch(`${import.meta.env.BASE_URL}tech_keywords.json`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setTechKeywords(d) })
       .catch(() => {})
   }, [])
 
-  // Build Fuse.js index (reuse patent-query config)
+  // Build Fuse.js index: merge group titles + tech keywords + ipc_names
   const fuse = useMemo(() => {
-    if (!techKeywords) return null
-    const corpus = techKeywords.map(t => ({
-      code: t.code,
-      label: t.label,
-      keywords: t.keywords,
-      name: getSubclassName(t.code)
-    }))
+    if (!groupTitles) return null
+    const kwMap = {}
+    if (techKeywords) techKeywords.forEach(t => { kwMap[t.code] = t })
+
+    const corpus = groupTitles.map(g => {
+      const kw = kwMap[g.sub]
+      return {
+        code: g.code,
+        sub: g.sub,
+        title: g.title,
+        subName: getSubclassName(g.sub),
+        label: kw?.label ?? '',
+        keywords: kw?.keywords ?? [],
+      }
+    })
     return new Fuse(corpus, {
       keys: [
-        { name: 'code', weight: 4 },
-        { name: 'name', weight: 2 },
-        { name: 'label', weight: 1.5 },
-        { name: 'keywords', weight: 1 },
+        { name: 'code', weight: 5 },      // IPC code exact match
+        { name: 'title', weight: 3 },      // WIPO official group title (main signal)
+        { name: 'subName', weight: 1.5 },  // subclass Chinese name
+        { name: 'label', weight: 1.5 },    // tech keyword label
+        { name: 'keywords', weight: 2 },   // tech keywords (Chinese terms)
       ],
-      threshold: 0.35,
+      threshold: 0.5,
       minMatchCharLength: 1,
+      ignoreLocation: true,
       includeScore: true,
       shouldSort: true,
     })
-  }, [techKeywords])
+  }, [groupTitles, techKeywords])
 
   useEffect(() => {
     const q = techInput.trim()
     if (!q || !fuse) { setSuggestions([]); return }
-    const results = fuse.search(q, { limit: 5 })
-    setSuggestions(results.map(({ item, score }) => ({
+    const results = fuse.search(q, { limit: 8 })
+    // Deduplicate by code (keep best score)
+    const seen = new Set()
+    const deduped = results.filter(({ item }) => {
+      if (seen.has(item.code)) return false
+      seen.add(item.code)
+      return true
+    }).slice(0, 6)
+
+    setSuggestions(deduped.map(({ item, score }) => ({
       code: item.code,
-      label: item.label || item.name,
-      name: item.name,
-      score: Math.round((1 - (score ?? 1)) * 100),
+      title: item.title,
+      subName: item.subName,
+      score,
     })))
   }, [techInput, fuse])
 
-  if (!techKeywords) return null
+  if (!groupTitles) return null
 
   return (
     <div className="tech-classifier">
@@ -1138,7 +1163,7 @@ function TechClassifier({ onSearch }) {
         <input
           className="tech-input"
           type="text"
-          placeholder="輸入技術描述，如：太陽能電池、3D列印、人工智慧..."
+          placeholder="輸入技術描述，如：semiconductor manufacturing、太陽能電池、additive manufacturing..."
           value={techInput}
           onChange={e => setTechInput(e.target.value)}
           autoComplete="off"
@@ -1147,10 +1172,9 @@ function TechClassifier({ onSearch }) {
         {suggestions.length > 0 && (
           <div className="tech-suggestions">
             {suggestions.map(s => (
-              <div key={s.code} className="tech-suggestion-item" onClick={() => { onSearch(s.code); setTechInput(''); setSuggestions([]) }}>
+              <div key={s.code} className="tech-suggestion-item" onClick={() => { onSearch(s.code.slice(0, 4)); setTechInput(''); setSuggestions([]) }}>
                 <span className="tech-sugg-code">{s.code}</span>
-                <span className="tech-sugg-label">{s.label || s.name}</span>
-                <span className="tech-sugg-score">{s.score} 分</span>
+                <span className="tech-sugg-label">{s.title}</span>
               </div>
             ))}
           </div>
