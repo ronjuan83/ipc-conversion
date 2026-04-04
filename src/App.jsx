@@ -331,7 +331,7 @@ function ReceivedSection({ received, onSearch, ipcGroups }) {
 }
 
 // Inline flow summary shown directly in SubclassCard
-function FlowSummary({ code, flowGraph, data, onSearch, onFlowView }) {
+function FlowSummary({ code, flowGraph, data, onSearch }) {
   if (!flowGraph) return null
   const isSubclass = /^[A-H]\d{2}[A-Z]$/.test(code)
   const rawFlow = isSubclass
@@ -368,7 +368,6 @@ function FlowSummary({ code, flowGraph, data, onSearch, onFlowView }) {
         <span className="section-icon">⟷</span>
         跨版本流變摘要
         <span className="count-badge">{relevantEdges.length} 筆異動、{sortedVersions.length} 個版本</span>
-        {onFlowView && <button className="flow-btn" style={{ marginLeft: 'auto' }} onClick={() => onFlowView(code)}>展開詳情</button>}
       </div>
       <div className="flow-summary-body">
         {sortedVersions.map(ver => {
@@ -412,7 +411,7 @@ function FlowSummary({ code, flowGraph, data, onSearch, onFlowView }) {
   )
 }
 
-function SubclassCard({ code, data, onSearch, onFlowView, ipcGroups, flowGraph }) {
+function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph }) {
   const entry = data.subclass_index[code] || {}
   const donated = entry.donated || []
   const received = entry.received || []
@@ -420,6 +419,38 @@ function SubclassCard({ code, data, onSearch, onFlowView, ipcGroups, flowGraph }
   const intro = data.introduced_in[code]
   const depr = data.deprecated_to[code]
   const deprAt = data.deprecated_at && data.deprecated_at[code]
+  const hasFlowData = donated.length > 0 || received.length > 0
+
+  const [viewTab, setViewTab] = useState('summary') // 'summary' | 'list' | 'timeline'
+
+  // Precompute flow data for list/timeline tabs
+  const rawFlow = flowGraph && hasFlowData
+    ? traceSubclassFlow(code, flowGraph, data.subclass_index)
+    : { edges: [], nodes: [] }
+  const originSub = code.slice(0, 4)
+  const relevantEdges = rawFlow.edges.filter(e => {
+    const fromSub = e.from.slice(0, 4)
+    const toSub = e.to.slice(0, 4)
+    return fromSub === originSub || toSub === originSub
+  })
+  const byVersion = {}
+  relevantEdges.forEach(e => {
+    if (!byVersion[e.version]) byVersion[e.version] = []
+    byVersion[e.version].push(e)
+  })
+  const sortedVersions = Object.keys(byVersion).sort((a, b) => versionOrder(a) - versionOrder(b))
+
+  const palette = ['#0d6efd', '#dc3545', '#198754', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c', '#6610f2', '#ffc107', '#17a2b8']
+  const allSubs = new Set()
+  relevantEdges.forEach(e => { allSubs.add(e.from.slice(0, 4)); allSubs.add(e.to.slice(0, 4)) })
+  const subColors = {}
+  let ci = 0
+  ;[...allSubs].sort().forEach(s => { subColors[s] = palette[ci++ % palette.length] })
+
+  const [expandedSections, setExpandedSections] = useState({})
+  function toggleSection(key) {
+    setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }))
+  }
 
   return (
     <div className="subclass-card">
@@ -430,8 +461,12 @@ function SubclassCard({ code, data, onSearch, onFlowView, ipcGroups, flowGraph }
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <StatusBadge code={code} data={data} onSearch={onSearch} />
-          {onFlowView && (donated.length > 0 || received.length > 0) && (
-            <button className="flow-btn" onClick={() => onFlowView(code)}>查看流變</button>
+          {hasFlowData && flowGraph && (
+            <div className="sankey-toggle">
+              <button className={`toggle-btn ${viewTab === 'summary' ? 'active' : ''}`} onClick={() => setViewTab('summary')}>摘要</button>
+              <button className={`toggle-btn ${viewTab === 'list' ? 'active' : ''}`} onClick={() => setViewTab('list')}>列表</button>
+              <button className={`toggle-btn ${viewTab === 'timeline' ? 'active' : ''}`} onClick={() => setViewTab('timeline')}>時間軸</button>
+            </div>
           )}
         </div>
       </div>
@@ -453,22 +488,91 @@ function SubclassCard({ code, data, onSearch, onFlowView, ipcGroups, flowGraph }
         </div>
       )}
 
-      <FlowSummary code={code} flowGraph={flowGraph} data={data} onSearch={onSearch} onFlowView={onFlowView} />
-
-      {donated.length === 0 && received.length === 0 ? (
-        <div className="no-moves">此分類在現有記錄中無跨分類異動。</div>
-      ) : (
+      {viewTab === 'summary' && (
         <>
-          <DonatedSection donated={donated} onSearch={onSearch} ipcGroups={ipcGroups} />
-          <ReceivedSection received={received} onSearch={onSearch} ipcGroups={ipcGroups} />
+          <FlowSummary code={code} flowGraph={flowGraph} data={data} onSearch={onSearch} />
+          {donated.length === 0 && received.length === 0 ? (
+            <div className="no-moves">此分類在現有記錄中無跨分類異動。</div>
+          ) : (
+            <>
+              <DonatedSection donated={donated} onSearch={onSearch} ipcGroups={ipcGroups} />
+              <ReceivedSection received={received} onSearch={onSearch} ipcGroups={ipcGroups} />
+            </>
+          )}
         </>
+      )}
+
+      {viewTab === 'list' && sortedVersions.map(ver => {
+        const edges = byVersion[ver]
+        const subFlows = {}
+        edges.forEach(e => {
+          const fromSub = e.from.slice(0, 4)
+          const toSub = e.to.slice(0, 4)
+          if (fromSub === toSub) return
+          const key = `${fromSub}→${toSub}`
+          if (!subFlows[key]) subFlows[key] = { fromSub, toSub, edges: [] }
+          subFlows[key].edges.push(e)
+        })
+        const flowEntries = Object.entries(subFlows)
+        if (flowEntries.length === 0) return null
+        return (
+          <div key={ver} className="flow-ver-block">
+            <div className="flow-ver-header">{ver}</div>
+            <div className="flow-ver-body">
+              {flowEntries.map(([key, sf]) => {
+                const sectionKey = `${ver}|${key}`
+                const isOpen = expandedSections[sectionKey]
+                const fromColor = subColors[sf.fromSub] || '#999'
+                const toColor = subColors[sf.toSub] || '#999'
+                return (
+                  <div key={key} className="flow-sub-row">
+                    <div className="flow-sub-summary" onClick={() => toggleSection(sectionKey)}>
+                      <span className="flow-sub-chip" style={{ borderColor: fromColor, color: fromColor }}
+                            onClick={e => { e.stopPropagation(); onSearch(sf.fromSub) }}>{sf.fromSub}</span>
+                      <span className="flow-sub-arrow">→</span>
+                      <span className="flow-sub-chip" style={{ borderColor: toColor, color: toColor }}
+                            onClick={e => { e.stopPropagation(); onSearch(sf.toSub) }}>{sf.toSub}</span>
+                      <span className="flow-sub-count">{sf.edges.length} 筆</span>
+                      <span className={`flow-sub-toggle ${isOpen ? 'open' : ''}`}>▸</span>
+                    </div>
+                    {isOpen && (
+                      <table className="move-table flow-detail-table">
+                        <thead><tr><th>原始組號</th><th>移入目的地</th></tr></thead>
+                        <tbody>
+                          {sf.edges.map((e, i) => (
+                            <tr key={i}>
+                              <td className="code-cell"><span className="code-link" onClick={() => onSearch(e.from)}>{e.from}</span></td>
+                              <td className="code-cell"><span className="code-link" onClick={() => onSearch(e.to)}>{e.to}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+
+      {viewTab === 'timeline' && (
+        <TimelineChart
+          sortedVersions={sortedVersions}
+          byVersion={byVersion}
+          originSub={originSub}
+          subColors={subColors}
+          expandedSections={expandedSections}
+          toggleSection={toggleSection}
+          onSearch={onSearch}
+        />
       )}
     </div>
   )
 }
 
 // Card for exact group-level code (4th/5th level)
-function GroupCard({ code, groupIndex, onSearch, onFlowView, ipcGroups }) {
+function GroupCard({ code, groupIndex, onSearch, ipcGroups }) {
   const entries = groupIndex[code] || []
   const subclass = code.slice(0, 4)
   const subclassName = getSubclassName(subclass)
@@ -502,9 +606,6 @@ function GroupCard({ code, groupIndex, onSearch, onFlowView, ipcGroups }) {
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           {donated.length > 0 && <span className="badge badge-deprecated">{donated.length} 筆移出</span>}
           {received.length > 0 && <span className="badge badge-new">{received.length} 筆移入</span>}
-          {onFlowView && (donated.length > 0 || received.length > 0) && (
-            <button className="flow-btn" onClick={() => onFlowView(code)}>查看流變</button>
-          )}
         </div>
       </div>
 
@@ -1008,164 +1109,6 @@ function TimelineChart({ sortedVersions, byVersion, originSub, subColors, expand
   )
 }
 
-function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
-  const isSubclass = /^[A-H]\d{2}[A-Z]$/.test(code)
-  const rawFlow = isSubclass
-    ? traceSubclassFlow(code, flowGraph, data.subclass_index)
-    : traceFlow(code, flowGraph)
-
-  const [expandedSections, setExpandedSections] = useState({})
-  const [flowView, setFlowView] = useState('list') // 'list' or 'tree'
-
-  if (rawFlow.edges.length === 0) {
-    return (
-      <div className="subclass-card">
-        <div className="card-header">
-          <span className="subclass-code">{code}</span>
-          <button className="flow-back-btn" onClick={onBack}>← 返回</button>
-        </div>
-        <div className="no-moves">此代碼在現有記錄中無跨版本流變紀錄。</div>
-      </div>
-    )
-  }
-
-  // Filter edges: only keep those directly involving the searched code's subclass
-  const originSub = code.slice(0, 4)
-  const relevantEdges = rawFlow.edges.filter(e => {
-    const fromSub = e.from.slice(0, 4)
-    const toSub = e.to.slice(0, 4)
-    return fromSub === originSub || toSub === originSub
-  })
-
-  // Group edges by version, then by (fromSub → toSub)
-  const byVersion = {}
-  relevantEdges.forEach(e => {
-    if (!byVersion[e.version]) byVersion[e.version] = []
-    byVersion[e.version].push(e)
-  })
-  const sortedVersions = Object.keys(byVersion).sort((a, b) => versionOrder(a) - versionOrder(b))
-
-  // Color palette
-  const palette = ['#0d6efd', '#dc3545', '#198754', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c', '#6610f2', '#ffc107', '#17a2b8']
-  const allSubs = new Set()
-  rawFlow.edges.forEach(e => { allSubs.add(e.from.slice(0, 4)); allSubs.add(e.to.slice(0, 4)) })
-  const subColors = {}
-  let ci = 0
-  ;[...allSubs].sort().forEach(s => { subColors[s] = palette[ci++ % palette.length] })
-
-  function toggleSection(key) {
-    setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }))
-  }
-
-  return (
-    <div className="subclass-card flow-card">
-      <div className="card-header">
-        <div className="card-title-row">
-          <span className="subclass-code">{code}</span>
-          {getSubclassName(code.slice(0, 4)) && (
-            <span className="subclass-name">
-              {isSubclass ? getSubclassName(code) : `所屬分類：${code.slice(0, 4)} ${getSubclassName(code.slice(0, 4))}`}
-            </span>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <div className="sankey-toggle">
-            <button className={`toggle-btn ${flowView === 'list' ? 'active' : ''}`} onClick={() => setFlowView('list')}>摘要</button>
-            <button className={`toggle-btn ${flowView === 'tree' ? 'active' : ''}`} onClick={() => setFlowView('tree')}>時間軸</button>
-          </div>
-          <button className="flow-back-btn" onClick={onBack}>← 返回</button>
-        </div>
-      </div>
-
-      {flowView === 'tree' && (
-        <TimelineChart
-          sortedVersions={sortedVersions}
-          byVersion={byVersion}
-          originSub={originSub}
-          subColors={subColors}
-          expandedSections={expandedSections}
-          toggleSection={toggleSection}
-          onSearch={onSearch}
-        />
-      )}
-
-      {flowView === 'list' && sortedVersions.map(ver => {
-        const edges = byVersion[ver]
-        // Group by fromSub → toSub
-        const subFlows = {}
-        edges.forEach(e => {
-          const fromSub = e.from.slice(0, 4)
-          const toSub = e.to.slice(0, 4)
-          if (fromSub === toSub) return // skip same-subclass internal moves
-          const key = `${fromSub}→${toSub}`
-          if (!subFlows[key]) subFlows[key] = { fromSub, toSub, edges: [] }
-          subFlows[key].edges.push(e)
-        })
-
-        const flowEntries = Object.entries(subFlows)
-        if (flowEntries.length === 0) return null // skip empty versions
-
-        return (
-          <div key={ver} className="flow-ver-block">
-            <div className="flow-ver-header">{ver}</div>
-            <div className="flow-ver-body">
-              {flowEntries.map(([key, sf]) => {
-                const sectionKey = `${ver}|${key}`
-                const isOpen = expandedSections[sectionKey]
-                const fromColor = subColors[sf.fromSub] || '#999'
-                const toColor = subColors[sf.toSub] || '#999'
-
-                return (
-                  <div key={key} className="flow-sub-row">
-                    <div className="flow-sub-summary" onClick={() => toggleSection(sectionKey)}>
-                      <span className="flow-sub-chip" style={{ borderColor: fromColor, color: fromColor }}
-                            onClick={e => { e.stopPropagation(); onSearch(sf.fromSub) }}>
-                        {sf.fromSub}
-                      </span>
-                      <span className="flow-sub-arrow">→</span>
-                      <span className="flow-sub-chip" style={{ borderColor: toColor, color: toColor }}
-                            onClick={e => { e.stopPropagation(); onSearch(sf.toSub) }}>
-                        {sf.toSub}
-                      </span>
-                      <span className="flow-sub-count">{sf.edges.length} 筆</span>
-                      <span className={`flow-sub-toggle ${isOpen ? 'open' : ''}`}>▸</span>
-                    </div>
-                    {isOpen && (
-                      <table className="move-table flow-detail-table">
-                        <thead>
-                          <tr><th>原始組號</th><th>移入目的地</th></tr>
-                        </thead>
-                        <tbody>
-                          {sf.edges.map((e, i) => (
-                            <tr key={i}>
-                              <td className="code-cell">
-                                <span className="code-link" onClick={() => onSearch(e.from)}>{e.from}</span>
-                              </td>
-                              <td className="code-cell">
-                                <span className="code-link" onClick={() => onSearch(e.to)}>{e.to}</span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
-
-      {flowView === 'list' && (
-        <div className="flow-stats">
-          共 {relevantEdges.length} 筆異動、橫跨 {sortedVersions.length} 個版本、涉及 {allSubs.size} 個分類
-        </div>
-      )}
-    </div>
-  )
-}
-
 const EXAMPLES = ['H01L', 'B01J', 'G06K', 'B29D', 'H10B', 'B81B', 'G06Q', 'E21B', 'F24S', 'C40B']
 
 // Read ?ipc= from URL
@@ -1186,7 +1129,7 @@ export default function App() {
   const [error, setError] = useState(null)
   const [suggestions, setSuggestions] = useState([])
   const [showSugg, setShowSugg] = useState(false)
-  const [flowCode, setFlowCode] = useState(null)
+
   const inputRef = useRef(null)
   const suggRef = useRef(null)
   const skipPushRef = useRef(false) // avoid pushing state on popstate
@@ -1440,25 +1383,16 @@ export default function App() {
               </p>
             </div>
           )}
-          {!loading && !error && flowCode && flowGraph && (
-            <FlowChart
-              code={flowCode}
-              flowGraph={flowGraph}
-              data={data}
-              onSearch={handleSearch}
-              onBack={() => setFlowCode(null)}
-            />
+          {!loading && !error && result && result.type === 'exact' && (
+            <SubclassCard code={result.code} data={data} onSearch={handleSearch} ipcGroups={ipcGroups} flowGraph={flowGraph} />
           )}
-          {!loading && !error && !flowCode && result && result.type === 'exact' && (
-            <SubclassCard code={result.code} data={data} onSearch={handleSearch} onFlowView={setFlowCode} ipcGroups={ipcGroups} flowGraph={flowGraph} />
-          )}
-          {!loading && !error && !flowCode && result && result.type === 'prefix' && (
+          {!loading && !error && result && result.type === 'prefix' && (
             <PrefixList prefix={result.prefix} data={data} onSearch={handleSearch} />
           )}
-          {!loading && !error && !flowCode && result && result.type === 'group-exact' && (
-            <GroupCard code={result.code} groupIndex={groupIndex} onSearch={handleSearch} onFlowView={setFlowCode} ipcGroups={ipcGroups} />
+          {!loading && !error && result && result.type === 'group-exact' && (
+            <GroupCard code={result.code} groupIndex={groupIndex} onSearch={handleSearch} ipcGroups={ipcGroups} />
           )}
-          {!loading && !error && !flowCode && result && result.type === 'group-prefix' && (
+          {!loading && !error && result && result.type === 'group-prefix' && (
             <GroupList
               prefix={result.prefix}
               matches={result.matches}
