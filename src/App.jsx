@@ -1177,37 +1177,78 @@ function TechClassifier({ onSearch }) {
   useEffect(() => {
     const q = techInput.trim()
     if (!q || !fuse) { setSuggestions([]); return }
-    const results = fuse.search(q, { limit: 8 })
-    // Deduplicate by code (keep best score)
-    const seen = new Set()
-    const deduped = results.filter(({ item }) => {
-      if (seen.has(item.code)) return false
-      seen.add(item.code)
-      return true
-    }).slice(0, 6)
 
-    setSuggestions(deduped.map(({ item, score }) => ({
-      code: item.code,
-      title: item.title,
-      subName: item.subName,
-      score,
-    })))
+    const isAbstract = q.length > 50
+
+    if (!isAbstract) {
+      // Short input: direct search
+      const results = fuse.search(q, { limit: 8 })
+      const seen = new Set()
+      const deduped = results.filter(({ item }) => {
+        if (seen.has(item.code)) return false
+        seen.add(item.code)
+        return true
+      }).slice(0, 6)
+      setSuggestions(deduped.map(({ item, score }) => ({
+        code: item.code, title: item.title, subName: item.subName, score, hits: 1
+      })))
+    } else {
+      // Long input (abstract): split into phrases, search each, aggregate scores
+      const phrases = q.split(/[。；;，,\.\n\r]+/).map(s => s.trim()).filter(s => s.length > 3)
+      const scoreMap = {} // code → { totalScore, hits, title, subName }
+
+      phrases.forEach(phrase => {
+        const results = fuse.search(phrase, { limit: 5 })
+        results.forEach(({ item, score }) => {
+          const key = item.code
+          if (!scoreMap[key]) {
+            scoreMap[key] = { code: item.code, title: item.title, subName: item.subName, totalScore: 0, hits: 0 }
+          }
+          scoreMap[key].totalScore += (1 - (score ?? 1))
+          scoreMap[key].hits += 1
+        })
+      })
+
+      // Rank by total accumulated score
+      const ranked = Object.values(scoreMap)
+        .sort((a, b) => b.totalScore - a.totalScore)
+        .slice(0, 10)
+
+      // Deduplicate by main group (keep best)
+      const seen = new Set()
+      const deduped = ranked.filter(r => {
+        if (seen.has(r.code)) return false
+        seen.add(r.code)
+        return true
+      }).slice(0, 8)
+
+      setSuggestions(deduped.map(r => ({
+        code: r.code, title: r.title, subName: r.subName,
+        score: 1 - (r.totalScore / Math.max(phrases.length, 1)),
+        hits: r.hits
+      })))
+    }
   }, [techInput, fuse])
 
   if (!groupTitles) return null
 
+  const isAbstract = techInput.trim().length > 50
+
   return (
     <div className="tech-classifier">
-      <div className="tech-classifier-header">技術特徵重分類</div>
+      <div className="tech-classifier-header">
+        技術特徵重分類
+        {isAbstract && <span style={{ fontSize: '0.72rem', color: '#6c757d', marginLeft: 8 }}>摘要分析模式</span>}
+      </div>
       <div className="tech-classifier-body">
-        <input
-          className="tech-input"
-          type="text"
-          placeholder="輸入技術描述，如：semiconductor manufacturing、太陽能電池、additive manufacturing..."
+        <textarea
+          className="tech-input tech-textarea"
+          placeholder="輸入關鍵字（如：太陽能電池）或貼入專利摘要進行自動分類..."
           value={techInput}
           onChange={e => setTechInput(e.target.value)}
           autoComplete="off"
           spellCheck={false}
+          rows={isAbstract ? 4 : 1}
         />
         {suggestions.length > 0 && (
           <div className="tech-suggestions">
@@ -1215,6 +1256,7 @@ function TechClassifier({ onSearch }) {
               <div key={s.code} className="tech-suggestion-item" onClick={() => { onSearch(s.code.slice(0, 4)); setTechInput(''); setSuggestions([]) }}>
                 <span className="tech-sugg-code">{s.code}</span>
                 <span className="tech-sugg-label">{s.title}</span>
+                {isAbstract && s.hits > 1 && <span className="tech-sugg-hits">{s.hits} 句匹配</span>}
               </div>
             ))}
           </div>

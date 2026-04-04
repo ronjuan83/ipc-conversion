@@ -172,8 +172,22 @@ body {
   box-sizing: border-box;
   transition: border-color 0.2s;
 }
+.tech-textarea {
+  resize: vertical;
+  min-height: 36px;
+  line-height: 1.5;
+}
 .tech-input:focus {
   border-color: var(--primary);
+}
+.tech-sugg-hits {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--version-bg);
+  padding: 1px 6px;
+  border-radius: 10px;
+  white-space: nowrap;
 }
 .tech-suggestions {
   margin-top: 8px;
