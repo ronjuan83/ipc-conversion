@@ -1226,14 +1226,19 @@ function TechClassifier({ onSearch }) {
 
 const EXAMPLES = ['H01L', 'B01J', 'G06K', 'B29D', 'H10B', 'B81B', 'G06Q', 'E21B', 'F24S', 'C40B']
 
-// Read ?ipc= from URL
+// Read ?ipc= and ?ver= from URL
 function getIpcFromUrl() {
   const params = new URLSearchParams(window.location.search)
   return (params.get('ipc') || '').trim().toUpperCase()
 }
+function getVerFromUrl() {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('ver') || ''
+}
 
 export default function App() {
   const initialIpc = getIpcFromUrl()
+  const initialVer = getVerFromUrl()
   const [query, setQuery] = useState(initialIpc)
   const [input, setInput] = useState(initialIpc)
   const [data, setData] = useState(null)
@@ -1244,7 +1249,7 @@ export default function App() {
   const [error, setError] = useState(null)
   const [suggestions, setSuggestions] = useState([])
   const [showSugg, setShowSugg] = useState(false)
-  const [selectedVersion, setSelectedVersion] = useState('') // '' = all versions
+  const [selectedVersion, setSelectedVersion] = useState(initialVer) // '' = all versions
 
   const inputRef = useRef(null)
   const suggRef = useRef(null)
@@ -1341,26 +1346,30 @@ export default function App() {
   }, [])
 
   // Sync URL with search state
-  function pushUrl(code) {
+  function pushUrl(code, ver) {
     if (skipPushRef.current) { skipPushRef.current = false; return }
     const base = window.location.pathname
-    const url = code ? `${base}?ipc=${encodeURIComponent(code)}` : base
-    window.history.pushState({ ipc: code }, '', url)
+    const params = new URLSearchParams()
+    if (code) params.set('ipc', code)
+    if (ver) params.set('ver', ver)
+    const qs = params.toString()
+    const url = qs ? `${base}?${qs}` : base
+    window.history.pushState({ ipc: code, ver: ver || '' }, '', url)
   }
 
   // Listen for browser back/forward
   useEffect(() => {
     function onPopState(e) {
       const ipc = e.state?.ipc || getIpcFromUrl()
+      const ver = e.state?.ver || getVerFromUrl()
       skipPushRef.current = true
       setQuery(ipc)
       setInput(ipc)
-      setFlowCode(null)
+      setSelectedVersion(ver)
       setShowSugg(false)
     }
     window.addEventListener('popstate', onPopState)
-    // Replace initial state so back works from first search
-    window.history.replaceState({ ipc: initialIpc }, '', window.location.href)
+    window.history.replaceState({ ipc: initialIpc, ver: initialVer }, '', window.location.href)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
@@ -1371,8 +1380,7 @@ export default function App() {
     setQuery(v)
     setInput(v)
     setShowSugg(false)
-    setFlowCode(null)
-    pushUrl(v)
+    pushUrl(v, selectedVersion)
   }
 
   function handleKeyDown(e) {
@@ -1384,7 +1392,7 @@ export default function App() {
     setInput(code)
     setQuery(code)
     setShowSugg(false)
-    pushUrl(code)
+    pushUrl(code, selectedVersion)
   }
 
   // Compute result
