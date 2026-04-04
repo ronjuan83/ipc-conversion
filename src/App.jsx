@@ -12,10 +12,14 @@ function getSubclassName(code) {
 }
 
 function getGroupTitle(code) {
-  // Try exact match first, then main group (X/00)
+  // Try exact match first
   if (GROUP_TITLES[code]) return GROUP_TITLES[code]
+  // Fallback to main group (X/00), mark as fallback
   const parts = code.match(/([A-H]\d{2}[A-Z])\s+(\d+)\//)
-  if (parts) return GROUP_TITLES[`${parts[1]} ${parts[2]}/00`] || ''
+  if (parts) {
+    const mainTitle = GROUP_TITLES[`${parts[1]} ${parts[2]}/00`]
+    if (mainTitle) return `[${parts[1]} ${parts[2]}/00] ${mainTitle}`
+  }
   return ''
 }
 
