@@ -11,14 +11,26 @@ function getSubclassName(code) {
   return SUBCLASS_NAMES[code] || ''
 }
 
+// GROUP_TITLES_ZH populated from ipc_group_titles.json 'zh' field
+let GROUP_TITLES_ZH = {}
+
 function getGroupTitle(code) {
-  // Try exact match first
-  if (GROUP_TITLES[code]) return GROUP_TITLES[code]
-  // Fallback to main group (X/00), mark as fallback
+  // Try Chinese first, then English
+  const zh = GROUP_TITLES_ZH[code]
+  const en = GROUP_TITLES[code]
+  if (zh && en) return `${zh} (${en})`
+  if (zh) return zh
+  if (en) return en
+  // Fallback to main group
   const parts = code.match(/([A-H]\d{2}[A-Z])\s+(\d+)\//)
   if (parts) {
-    const mainTitle = GROUP_TITLES[`${parts[1]} ${parts[2]}/00`]
-    if (mainTitle) return `[${parts[1]} ${parts[2]}/00] ${mainTitle}`
+    const mainCode = `${parts[1]} ${parts[2]}/00`
+    const mZh = GROUP_TITLES_ZH[mainCode]
+    const mEn = GROUP_TITLES[mainCode]
+    if (mZh || mEn) {
+      const label = mZh && mEn ? `${mZh} (${mEn})` : (mZh || mEn)
+      return `[${mainCode}] ${label}`
+    }
   }
   return ''
 }
@@ -1251,7 +1263,10 @@ export default function App() {
         fetch(`${import.meta.env.BASE_URL}ipc_group_titles.json`)
           .then(r => r.ok ? r.json() : null)
           .then(arr => {
-            if (arr) arr.forEach(g => { GROUP_TITLES[g.code] = g.title })
+            if (arr) arr.forEach(g => {
+              GROUP_TITLES[g.code] = g.title
+              if (g.zh) GROUP_TITLES_ZH[g.code] = g.zh
+            })
           })
           .catch(() => {})
       })
