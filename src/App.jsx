@@ -464,6 +464,7 @@ function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph }) {
           {hasFlowData && flowGraph && (
             <div className="sankey-toggle">
               <button className={`toggle-btn ${viewTab === 'summary' ? 'active' : ''}`} onClick={() => setViewTab('summary')}>摘要</button>
+              <button className={`toggle-btn ${viewTab === 'list' ? 'active' : ''}`} onClick={() => setViewTab('list')}>列表</button>
               <button className={`toggle-btn ${viewTab === 'timeline' ? 'active' : ''}`} onClick={() => setViewTab('timeline')}>時間軸</button>
             </div>
           )}
@@ -543,15 +544,18 @@ function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph }) {
               </div>
             )
           })}
-          {donated.length === 0 && received.length === 0 ? (
-            <div className="no-moves">此分類在現有記錄中無跨分類異動。</div>
-          ) : (
-            <>
-              <DonatedSection donated={donated} onSearch={onSearch} ipcGroups={ipcGroups} />
-              <ReceivedSection received={received} onSearch={onSearch} ipcGroups={ipcGroups} />
-            </>
-          )}
         </>
+      )}
+
+      {viewTab === 'list' && (
+        donated.length === 0 && received.length === 0 ? (
+          <div className="no-moves">此分類在現有記錄中無跨分類異動。</div>
+        ) : (
+          <>
+            <DonatedSection donated={donated} onSearch={onSearch} ipcGroups={ipcGroups} />
+            <ReceivedSection received={received} onSearch={onSearch} ipcGroups={ipcGroups} />
+          </>
+        )
       )}
 
       {viewTab === 'timeline' && (
