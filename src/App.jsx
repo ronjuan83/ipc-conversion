@@ -1799,15 +1799,16 @@ export default function App() {
   }
 
   return (
+    <>
+    <nav className="site-nav">
+      <div className="site-nav-inner">
+        <span className="site-nav-brand">IPC 工具</span>
+        <a href={import.meta.env.BASE_URL} className="site-nav-link active">歷史查詢</a>
+        <a href={`${import.meta.env.BASE_URL}reclassify.html`} className="site-nav-link">批次重分類</a>
+        <a href="https://github.com/ronjuan83/ipc-search" target="_blank" rel="noreferrer" className="site-nav-github">GitHub</a>
+      </div>
+    </nav>
     <div className="app">
-      <nav className="site-nav">
-        <div className="site-nav-inner">
-          <span className="site-nav-brand">IPC 工具</span>
-          <a href={import.meta.env.BASE_URL} className="site-nav-link active">歷史查詢</a>
-          <a href={`${import.meta.env.BASE_URL}reclassify.html`} className="site-nav-link">批次重分類</a>
-          <a href="https://github.com/ronjuan83/ipc-search" target="_blank" rel="noreferrer" className="site-nav-github">GitHub</a>
-        </div>
-      </nav>
       <header className="app-header">
         <h1 className="app-title">IPC 分類代碼歷史查詢</h1>
         <p className="app-subtitle">
@@ -1908,5 +1909,6 @@ export default function App() {
         資料來源：WIPO IPC 調和表（IPC v6 → 2026.01）
       </footer>
     </div>
+    </>
   )
 }

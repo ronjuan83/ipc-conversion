@@ -10,6 +10,8 @@ html { overflow-y: scroll; } /* 防止頁面切換時捲軸出現/消失導致 n
   position: sticky;
   top: 0;
   z-index: 100;
+  width: 100vw;
+  margin-left: calc(-50vw + 50%);
 }
 .site-nav-inner {
   max-width: 960px;
