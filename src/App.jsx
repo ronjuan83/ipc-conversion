@@ -1208,7 +1208,10 @@ function TechClassifier({ onSearch }) {
     setIpccatLoading(true)
     const timer = setTimeout(() => {
       const encoded = encodeURIComponent(q)
-      const ipccatUrl = `https://ipcpub.wipo.int/search/ipccat/20260101/en/subgroup/5/${encoded}/`
+      // Auto-detect language: if >30% non-ASCII chars → Chinese, else English
+      const nonAscii = (q.match(/[^\x00-\x7F]/g) || []).length
+      const lang = nonAscii > q.length * 0.3 ? 'zh' : 'en'
+      const ipccatUrl = `https://ipcpub.wipo.int/search/ipccat/20260101/${lang}/subgroup/5/${encoded}/`
       // Try multiple CORS proxies as fallback
       const proxies = [
         url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
