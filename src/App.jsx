@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Fuse from 'fuse.js'
 import './App.css'
 
@@ -1163,35 +1163,239 @@ function TechClassifier({ onSearch }) {
   const fuseZh = useMemo(() => {
     if (!techKeywords) return null
     const corpus = techKeywords.map(t => ({
-      code: t.code, sub: t.code, label: t.label, keywords: t.keywords, subName: getSubclassName(t.code),
+      code: t.code, sub: t.code, label: t.label, keywords: t.keywords,
+      subName: getSubclassName(t.code), tipoDesc: t.tipoDesc || '',
     }))
     return new Fuse(corpus, {
-      keys: [{ name: 'code', weight: 4 }, { name: 'label', weight: 3 }, { name: 'keywords', weight: 4 }, { name: 'subName', weight: 2 }],
-      threshold: 0.4, minMatchCharLength: 1, ignoreLocation: true, includeScore: true, shouldSort: true,
+      keys: [
+        { name: 'code', weight: 5 },
+        { name: 'label', weight: 3 },
+        { name: 'keywords', weight: 4 },
+        { name: 'subName', weight: 2 },
+        { name: 'tipoDesc', weight: 2.5 },
+      ],
+      threshold: 0.4, minMatchCharLength: 2, ignoreLocation: true, includeScore: true, shouldSort: true,
     })
   }, [techKeywords])
+
+  // === Improvement 3: Pre-compute TF-IDF for Chinese bigrams ===
+  const zhIdf = useMemo(() => {
+    if (!techKeywords) return null
+    const docFreq = {} // bigram → how many subclasses contain it
+    const N = techKeywords.length
+    techKeywords.forEach(t => {
+      const text = (t.tipoDesc || '') + (t.keywords || []).join('') + (t.label || '')
+      const seen = new Set()
+      for (let i = 0; i < text.length - 1; i++) {
+        const bi = text.slice(i, i + 2)
+        if (/^[\u4e00-\u9fff]{2}$/.test(bi) && !seen.has(bi)) {
+          seen.add(bi)
+          docFreq[bi] = (docFreq[bi] || 0) + 1
+        }
+      }
+    })
+    const idf = {}
+    for (const [term, df] of Object.entries(docFreq)) {
+      idf[term] = Math.log(N / df) // high IDF = rare = more distinctive
+    }
+    return { idf, maxIdf: Math.log(N) }
+  }, [techKeywords])
+
+  // === Improvement 3b: Pre-compute trigram IDF ===
+  const zhTriIdf = useMemo(() => {
+    if (!techKeywords) return null
+    const docFreq = {}
+    const N = techKeywords.length
+    techKeywords.forEach(t => {
+      const text = (t.tipoDesc || '') + (t.keywords || []).join('') + (t.label || '')
+      const seen = new Set()
+      for (let i = 0; i < text.length - 2; i++) {
+        const tri = text.slice(i, i + 3)
+        if (/^[\u4e00-\u9fff]{3}$/.test(tri) && !seen.has(tri)) {
+          seen.add(tri)
+          docFreq[tri] = (docFreq[tri] || 0) + 1
+        }
+      }
+    })
+    const idf = {}
+    for (const [term, df] of Object.entries(docFreq)) {
+      idf[term] = Math.log(N / df)
+    }
+    return idf
+  }, [techKeywords])
+
+  // === Improvement 5: Pre-compute bigram inverted index for speed ===
+  const bigramIndex = useMemo(() => {
+    if (!techKeywords) return null
+    const idx = {} // bigram → Set of subclass indices
+    techKeywords.forEach((t, i) => {
+      const text = (t.tipoDesc || '') + (t.keywords || []).join('') + (t.label || '') + (getSubclassName(t.code) || '')
+      const seen = new Set()
+      for (let j = 0; j < text.length - 1; j++) {
+        const bi = text.slice(j, j + 2)
+        if (/^[\u4e00-\u9fff]{2}$/.test(bi) && !seen.has(bi)) {
+          seen.add(bi)
+          if (!idx[bi]) idx[bi] = []
+          idx[bi].push(i)
+        }
+      }
+    })
+    return idx
+  }, [techKeywords])
+
+  // === Custom Chinese search engine (exact substring + bigram/trigram + TF-IDF + inverted index) ===
+  const searchZhCustom = useCallback((q) => {
+    if (!techKeywords || !zhIdf || !bigramIndex || !zhTriIdf) return []
+    const { idf, maxIdf } = zhIdf
+
+    // Extract Chinese bigrams and trigrams from query
+    const qBigrams = []
+    const qTrigrams = []
+    for (let i = 0; i < q.length - 1; i++) {
+      const bi = q.slice(i, i + 2)
+      if (/^[\u4e00-\u9fff]{2}$/.test(bi)) qBigrams.push(bi)
+    }
+    for (let i = 0; i < q.length - 2; i++) {
+      const tri = q.slice(i, i + 3)
+      if (/^[\u4e00-\u9fff]{3}$/.test(tri)) qTrigrams.push(tri)
+    }
+    if (qBigrams.length === 0 && !/[\u4e00-\u9fff]/.test(q)) return []
+
+    // === Improvement 3: Use inverted index to find candidate subclasses ===
+    const candidateSet = new Set()
+    qBigrams.forEach(bi => {
+      if (bigramIndex[bi]) bigramIndex[bi].forEach(i => candidateSet.add(i))
+    })
+    // Also add exact substring candidates (scan all if query is short)
+    if (q.length <= 6) {
+      techKeywords.forEach((_, i) => candidateSet.add(i))
+    }
+
+    const results = []
+    candidateSet.forEach(idx => {
+      const t = techKeywords[idx]
+      const allText = (t.tipoDesc || '') + '；' + (t.keywords || []).join('；') + '；' + (t.label || '') + '；' + (getSubclassName(t.code) || '')
+      let score = 0
+      let bigramHits = 0
+      const matchedTerms = [] // Improvement 1: track what matched
+
+      // --- Exact substring match (highest priority) ---
+      // Bonus: keyword/label match ranks higher than tipoDesc-only match
+      const kwText = (t.keywords || []).join('；') + '；' + (t.label || '') + '；' + (getSubclassName(t.code) || '')
+      const hasExact = q.length >= 2 && allText.includes(q)
+      const hasKwExact = q.length >= 2 && kwText.includes(q)
+      if (hasKwExact) {
+        score += 150 // keyword/label exact match → strongest signal
+        matchedTerms.push(q)
+      } else if (hasExact) {
+        score += 80 // tipoDesc-only match → weaker
+        matchedTerms.push(q)
+      }
+
+      // --- Bigram co-occurrence with TF-IDF weighting ---
+      if (qBigrams.length > 0) {
+        let idfSum = 0
+        qBigrams.forEach(bi => {
+          if (allText.includes(bi)) {
+            bigramHits++
+            idfSum += idf[bi] || 1
+          }
+        })
+        const cov = bigramHits / qBigrams.length
+        const avgIdf = bigramHits > 0 ? idfSum / bigramHits / maxIdf : 0
+        score += cov * 50
+        score += cov * avgIdf * 30
+      }
+
+      // --- Improvement 4: Trigram matching (solves G04C vs H02K) ---
+      if (qTrigrams.length > 0) {
+        let triHits = 0
+        let triIdfSum = 0
+        qTrigrams.forEach(tri => {
+          if (allText.includes(tri)) {
+            triHits++
+            triIdfSum += zhTriIdf[tri] || 1
+          }
+        })
+        const triCov = triHits / qTrigrams.length
+        const triAvgIdf = triHits > 0 ? triIdfSum / triHits / maxIdf : 0
+        score += triCov * 40 // trigram coverage bonus
+        score += triCov * triAvgIdf * 25 // trigram TF-IDF bonus
+      }
+
+      // --- Improvement 1: Collect matched keywords for display ---
+      if (bigramHits > 0) {
+        // Find which Chinese keywords from this subclass overlap with the query
+        const kws = (t.keywords || []).filter(k => /[\u4e00-\u9fff]{2,}/.test(k) && k.length <= 8)
+        kws.forEach(kw => {
+          // Check: query contains keyword, keyword contains query, or shared bigrams ≥ 50%
+          const shared = qBigrams.filter(bi => kw.includes(bi)).length
+          if (q.includes(kw) || kw.includes(q) || shared >= Math.max(2, Math.ceil(qBigrams.length * 0.4))) {
+            if (!matchedTerms.includes(kw) && kw !== q) matchedTerms.push(kw)
+          }
+        })
+        // Also check label (Chinese part only)
+        const labelZh = (t.label || '').split(/\s/)[0]
+        if (labelZh && labelZh.length >= 2 && /[\u4e00-\u9fff]/.test(labelZh)) {
+          const shared = qBigrams.filter(bi => labelZh.includes(bi)).length
+          if (shared >= 1 && !matchedTerms.includes(labelZh)) matchedTerms.push(labelZh)
+        }
+      }
+
+      // Short queries (≤10 bigrams): 40% coverage; long text: at least 3 bigrams
+      const coverage = qBigrams.length > 0 ? bigramHits / qBigrams.length : 0
+      const passFilter = hasExact || (qBigrams.length <= 10 ? coverage >= 0.4 : bigramHits >= 3)
+      if (score > 0 && passFilter) {
+        results.push({
+          item: { code: t.code, sub: t.code, label: t.label, subName: getSubclassName(t.code),
+                  matchReason: matchedTerms.slice(0, 3).join('、') },
+          score: 1 / (1 + score),
+          src: 'zhCustom',
+        })
+      }
+    })
+    results.sort((a, b) => a.score - b.score)
+    return results.slice(0, 10)
+  }, [techKeywords, zhIdf, zhTriIdf, bigramIndex])
 
   useEffect(() => {
     const q = techInput.trim()
     if (!q) { setSuggestions([]); return }
-    if (q.length > 50) { setSuggestions([]); return } // long text → IPCCAT only
-
+    // Long English text → IPCCAT only; long Chinese text → still use our engine
+    const isZh = /[\u4e00-\u9fff]/.test(q)
+    if (q.length > 50 && !isZh) { setSuggestions([]); return }
     const timer = setTimeout(() => {
-      // Search both indexes and merge results
       const allResults = []
-      if (fuseZh) {
-        fuseZh.search(q, { limit: 10 }).forEach(r => {
-          allResults.push({ item: r.item, score: r.score, src: 'zh' })
-        })
+
+      // Chinese: custom engine (exact substring + bigram + TF-IDF) takes priority
+      if (isZh) {
+        const customHits = searchZhCustom(q)
+        allResults.push(...customHits)
+        // Fuse.js as fallback — only add if custom found few results, with heavy penalty
+        if (fuseZh && customHits.length < 4) {
+          const customSubs = new Set(customHits.map(h => h.item.sub))
+          fuseZh.search(q, { limit: 6 }).forEach(r => {
+            if (!customSubs.has(r.item.sub)) { // skip duplicates
+              allResults.push({ item: r.item, score: Math.min(r.score + 0.5, 1), src: 'zh' })
+            }
+          })
+        }
+      } else {
+        // English: use Fuse.js indexes directly
+        if (fuseZh) {
+          fuseZh.search(q, { limit: 10 }).forEach(r => {
+            allResults.push({ item: r.item, score: r.score, src: 'zh' })
+          })
+        }
+        if (fuseEn) {
+          fuseEn.search(q, { limit: 20 }).forEach(r => {
+            allResults.push({ item: r.item, score: r.score, src: 'en' })
+          })
+        }
       }
-      if (fuseEn) {
-        fuseEn.search(q, { limit: 20 }).forEach(r => {
-          allResults.push({ item: r.item, score: r.score, src: 'en' })
-        })
-      }
-      // Sort by score (lower = better)
+
+      // Sort by score (lower = better), deduplicate by subclass
       allResults.sort((a, b) => (a.score || 1) - (b.score || 1))
-      // Deduplicate by subclass
       const seenSub = new Set()
       const deduped = allResults.filter(({ item }) => {
         if (seenSub.has(item.sub)) return false
@@ -1199,17 +1403,18 @@ function TechClassifier({ onSearch }) {
         return true
       }).slice(0, 6)
       setSuggestions(deduped.map(({ item, score }) => ({
-        code: item.code, title: item.label || item.title || item.subName, subName: item.subName, score, hits: 1
+        code: item.code, title: item.label || item.title || item.subName, subName: item.subName, score, hits: 1,
+        matchReason: item.matchReason || '',
       })))
-    }, 300)
+    }, isZh ? 100 : 300) // Chinese is fast (no Fuse.js overhead), shorter debounce
     return () => clearTimeout(timer)
-  }, [techInput, fuseEn, fuseZh])
+  }, [techInput, fuseEn, fuseZh, searchZhCustom])
 
-  // IPCCAT API call (for long text >50 chars OR any input >3 chars with Chinese)
+  // IPCCAT API call — English only (Chinese accuracy too low ~71%, misleading users)
   useEffect(() => {
     const q = techInput.trim()
     const hasChinese = /[^\x00-\x7F]/.test(q)
-    if (!q || (q.length < 3) || (!hasChinese && q.length <= 50)) { setIpccatResults([]); return }
+    if (!q || q.length < 3 || hasChinese || q.length <= 50) { setIpccatResults([]); return }
 
     setIpccatLoading(true)
     const timer = setTimeout(() => {
@@ -1254,7 +1459,8 @@ function TechClassifier({ onSearch }) {
   if (!groupTitles) return null
 
   const isAbstract = techInput.trim().length > 50
-  const showIpccat = isAbstract || (/[^\x00-\x7F]/.test(techInput.trim()) && techInput.trim().length >= 3)
+  const hasChinese = /[^\x00-\x7F]/.test(techInput.trim())
+  const showIpccat = isAbstract && !hasChinese
 
   return (
     <div className="tech-classifier">
@@ -1265,7 +1471,7 @@ function TechClassifier({ onSearch }) {
       <div className="tech-classifier-body">
         <textarea
           className="tech-input tech-textarea"
-          placeholder="輸入關鍵字（如：太陽能電池）或貼入專利摘要進行自動分類..."
+          placeholder="輸入中文關鍵字（如：太陽能電池）或貼入英文摘要進行 AI 分類..."
           value={techInput}
           onChange={e => setTechInput(e.target.value)}
           autoComplete="off"
@@ -1278,6 +1484,7 @@ function TechClassifier({ onSearch }) {
               <div key={s.code} className="tech-suggestion-item" onClick={() => { onSearch(s.code.slice(0, 4)); setTechInput(''); setSuggestions([]); setIpccatResults([]) }}>
                 <span className="tech-sugg-code">{s.code}</span>
                 <span className="tech-sugg-label">{s.title}</span>
+                {s.matchReason && <span className="tech-sugg-reason">← {s.matchReason}</span>}
               </div>
             ))}
           </div>
@@ -1301,8 +1508,13 @@ function TechClassifier({ onSearch }) {
                 })}
               </div>
             ) : (
-              <div className="tech-ipccat-loading">貼入超過 50 字的摘要後自動查詢 WIPO AI 分類</div>
+              <div className="tech-ipccat-loading">貼入超過 50 字的英文摘要後自動查詢 WIPO AI 分類</div>
             )}
+          </div>
+        )}
+        {isAbstract && hasChinese && (
+          <div style={{ marginTop: 8, fontSize: '0.75rem', color: '#e67e22' }}>
+            ⚠️ WIPO IPCCAT 中文準確率偏低，建議貼入英文摘要以取得精確的 IPC 五階分類
           </div>
         )}
       </div>

@@ -252,6 +252,13 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.tech-sugg-reason {
+  font-size: 0.7rem;
+  color: #27ae60;
+  white-space: nowrap;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
 .tech-sugg-score {
   font-size: 0.72rem;
   font-weight: 600;
