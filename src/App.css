@@ -1,6 +1,48 @@
 /* ── Reset & Base ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ── Site Nav ── */
+.site-nav {
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 10px 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.site-nav-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.site-nav-brand {
+  font-weight: 700;
+  color: #2c3e50;
+  font-size: 0.95rem;
+}
+.site-nav-link {
+  text-decoration: none;
+  color: #666;
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+.site-nav-link:hover { background: #f0f0f0; }
+.site-nav-link.active {
+  color: #fff;
+  background: #3498db;
+  font-weight: 600;
+}
+.site-nav-github {
+  text-decoration: none;
+  color: #999;
+  font-size: 0.8rem;
+  margin-left: auto;
+}
+
 :root {
   --bg: #f8f9fa;
   --card-bg: #ffffff;
