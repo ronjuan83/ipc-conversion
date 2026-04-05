@@ -1180,17 +1180,18 @@ function TechClassifier({ onSearch }) {
     const q = techInput.trim()
     if (!q || !fuse) { setSuggestions([]); return }
 
-    const isAbstract = q.length > 50
+    const isLong = q.length > 50
 
-    // Short input only: Fuse.js local search (skip for abstracts — use IPCCAT instead)
-    if (isAbstract) { setSuggestions([]); return }
+    // Long text → skip Fuse.js, use IPCCAT only
+    if (isLong) { setSuggestions([]); return }
 
     const timer = setTimeout(() => {
-      const results = fuse.search(q, { limit: 8 })
-      const seen = new Set()
+      const results = fuse.search(q, { limit: 50 })
+      // Deduplicate by subclass — show best match per subclass
+      const seenSub = new Set()
       const deduped = results.filter(({ item }) => {
-        if (seen.has(item.code)) return false
-        seen.add(item.code)
+        if (seenSub.has(item.sub)) return false
+        seenSub.add(item.sub)
         return true
       }).slice(0, 6)
       setSuggestions(deduped.map(({ item, score }) => ({
@@ -1200,10 +1201,11 @@ function TechClassifier({ onSearch }) {
     return () => clearTimeout(timer)
   }, [techInput, fuse])
 
-  // IPCCAT API call (debounced, only for abstract mode)
+  // IPCCAT API call (for long text >50 chars OR any input >3 chars with Chinese)
   useEffect(() => {
     const q = techInput.trim()
-    if (q.length <= 50) { setIpccatResults([]); return }
+    const hasChinese = /[^\x00-\x7F]/.test(q)
+    if (!q || (q.length < 3) || (!hasChinese && q.length <= 50)) { setIpccatResults([]); return }
 
     setIpccatLoading(true)
     const timer = setTimeout(() => {
@@ -1248,6 +1250,7 @@ function TechClassifier({ onSearch }) {
   if (!groupTitles) return null
 
   const isAbstract = techInput.trim().length > 50
+  const showIpccat = isAbstract || (/[^\x00-\x7F]/.test(techInput.trim()) && techInput.trim().length >= 3)
 
   return (
     <div className="tech-classifier">
@@ -1265,7 +1268,7 @@ function TechClassifier({ onSearch }) {
           spellCheck={false}
           rows={isAbstract ? 4 : 1}
         />
-        {suggestions.length > 0 && !isAbstract && (
+        {suggestions.length > 0 && (
           <div className="tech-suggestions">
             {suggestions.map(s => (
               <div key={s.code} className="tech-suggestion-item" onClick={() => { onSearch(s.code.slice(0, 4)); setTechInput(''); setSuggestions([]); setIpccatResults([]) }}>
@@ -1275,7 +1278,7 @@ function TechClassifier({ onSearch }) {
             ))}
           </div>
         )}
-        {isAbstract && (
+        {showIpccat && (
           <div style={{ marginTop: 8 }}>
             <div className="tech-result-label">WIPO IPCCAT AI 預測</div>
             {ipccatLoading ? (
