@@ -128,14 +128,14 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
         <div class="desc">組號異動映射</div>
       </div>
       <div class="exec-item" style="background:linear-gradient(135deg,#4facfe 0%,#00f2fe 100%)">
-        <div class="big">~85%</div>
+        <div class="big" id="exec-pct">—</div>
         <div class="desc">預估不需處理</div>
       </div>
     </div>
     <div class="exec-highlight">
       <strong>自動化效益：</strong>系統可在數秒內完成 80 萬筆專利的 IPC 異動標記。
-      其中約 <strong>85% 不需任何處理</strong>，<strong>4% 可安全自動替換</strong>（廢棄代碼），
-      剩餘 <strong>11% 需人工確認</strong>（技術範圍移動，需依專利內容判斷是否跟隨移動）。
+      依模擬結果，約 <strong id="exec-text-unchanged">—</strong> 不需任何處理，<strong id="exec-text-auto">—</strong> 可安全自動替換（廢棄代碼），
+      剩餘 <strong id="exec-text-review">—</strong> 需人工確認（技術範圍移動，需依專利內容判斷是否跟隨移動）。
       <br><br>
       <strong>核心價值：</strong>不盲目替換 — concordance 代表「技術範圍的移動」，不代表所有專利都要跟著移。
       系統精準標記候選專利，讓審查人員只需關注真正需要判斷的案件。
@@ -157,10 +157,10 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
       </div>
       <div class="flow-arrow">&rarr;</div>
       <div class="flow-output">
-        <div class="flow-out-item" style="background:#e8f5e9;color:#2e7d32">不需處理 ~85%</div>
-        <div class="flow-out-item" style="background:#e3f2fd;color:#1565c0">自動替換 ~4%</div>
-        <div class="flow-out-item" style="background:#fff3e0;color:#e65100">需人工判斷 ~3%</div>
-        <div class="flow-out-item" style="background:#fce4ec;color:#c62828">需確認範圍 ~8%</div>
+        <div class="flow-out-item" style="background:#e8f5e9;color:#2e7d32" id="flow-unchanged">不需處理</div>
+        <div class="flow-out-item" style="background:#e3f2fd;color:#1565c0" id="flow-auto">自動替換</div>
+        <div class="flow-out-item" style="background:#fff3e0;color:#e65100" id="flow-deprecated">需人工判斷</div>
+        <div class="flow-out-item" style="background:#fce4ec;color:#c62828" id="flow-scope">需確認範圍</div>
       </div>
     </div>
   </div>
@@ -171,7 +171,7 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
     <div style="display:grid;gap:14px">
 
       <div style="background:#e8f5e9;border-left:4px solid #4caf50;border-radius:0 8px 8px 0;padding:14px 16px">
-        <div style="font-weight:700;color:#2e7d32;margin-bottom:4px">不需處理 (~85%)</div>
+        <div style="font-weight:700;color:#2e7d32;margin-bottom:4px">不需處理</div>
         <div style="font-size:0.85rem;color:#555">
           該 IPC 代碼在歷次版本中<strong>未涉及任何異動</strong>，分類定義完全不變。
           這些專利的 IPC 無論在哪個版本都代表相同的技術範圍，無需任何動作。
@@ -182,7 +182,7 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
       </div>
 
       <div style="background:#e3f2fd;border-left:4px solid #2196f3;border-radius:0 8px 8px 0;padding:14px 16px">
-        <div style="font-weight:700;color:#1565c0;margin-bottom:4px">自動替換 (~4%)</div>
+        <div style="font-weight:700;color:#1565c0;margin-bottom:4px">自動替換</div>
         <div style="font-size:0.85rem;color:#555">
           該 subclass <strong>已被 WIPO 正式廢棄</strong>，且只有唯一一個繼承代碼。
           例如 C13C（糖的精製）在 2011 年被廢棄，<strong>全部</strong>合併到 C13B。
@@ -194,7 +194,7 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
       </div>
 
       <div style="background:#fff3e0;border-left:4px solid #ff9800;border-radius:0 8px 8px 0;padding:14px 16px">
-        <div style="font-weight:700;color:#e65100;margin-bottom:4px">需人工判斷 (~3%) — 廢棄多目的地</div>
+        <div style="font-weight:700;color:#e65100;margin-bottom:4px">需人工判斷 — 廢棄多目的地</div>
         <div style="font-size:0.85rem;color:#555">
           該 subclass 已被廢棄，但<strong>拆分成多個新代碼</strong>。
           例如 F24J（太陽能集熱器）在 2018 年被拆成 F24S（太陽能集熱器）、F24T（地熱集熱器）、F24V（其他熱傳遞）三個新代碼。
@@ -206,7 +206,7 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
       </div>
 
       <div style="background:#fce4ec;border-left:4px solid #e91e63;border-radius:0 8px 8px 0;padding:14px 16px">
-        <div style="font-weight:700;color:#c62828;margin-bottom:4px">需確認範圍 (~8%) — 技術範圍部分移動</div>
+        <div style="font-weight:700;color:#c62828;margin-bottom:4px">需確認範圍 — 技術範圍部分移動</div>
         <div style="font-size:0.85rem;color:#555">
           該 IPC 代碼<strong>本身仍然存在</strong>，但其涵蓋的技術範圍在某個版本<strong>被縮小</strong>，
           部分技術內容被移到了新的代碼。專利可能留在原位，也可能需要跟著移走。
@@ -476,7 +476,7 @@ function classify(code) {
     const at = deprecatedAt[p.sub] || '?';
     const destsWithNames = dests.map(d => ({ code: d, name: getSubName(d) }));
     return { action: 'review_deprecated', original: code, candidates: dests.join(', '), destsWithNames,
-      srcName: getSubName(p.sub),
+      srcName: getSubName(p.sub), version: at,
       detail: `${p.sub} 廢棄 → ${dests.join('/')}（${at} 版），需依專利內容判斷` };
   }
   if (p.group) {
@@ -486,6 +486,7 @@ function classify(code) {
       const srcTitle = getTitle(p.group) || getTitle(p.sub + ' ' + p.main + '/00');
       const dstTitle = getTitle(dst);
       return { action: 'review_scope', original: code, possible_new: dst, srcTitle, dstTitle,
+        version: info.version,
         detail: `${p.group} → ${dst}（${info.version}），需確認專利是否屬於移出的技術範圍` };
     }
     if (p.main !== null) {
@@ -496,6 +497,7 @@ function classify(code) {
         const srcTitle = getTitle(mainKey);
         const dstTitle = getTitle(dst);
         return { action: 'review_scope', original: code, possible_new: dst, srcTitle, dstTitle,
+          version: mainInfo.version,
           detail: `主組 ${mainKey} 有異動 → ${dst}（${mainInfo.version}），此子組可能受影響` };
       }
     }
@@ -723,7 +725,13 @@ function runDemo() {
     'B62M 6/20','B31B 29/66','B63B 22/24','B61L 1/14','B31D 41/25','B32B 5/18','B21K 51/14','B65D 19/30','B29B 13/00','B31B 19/02',
     'B31B 27/30','B28B 7/50','B31B 17/58','B60L 58/30','B29C 5/40','B60J 10/242','B01D 20/00','B65B 53/00','B64U 30/40','B01F 9/20',
   ];
-  const all = [...sampleIPCs, ...unchanged.slice(0, 152), ...extraCodes].slice(0, 1000);
+  const allRaw = [...sampleIPCs, ...unchanged, ...extraCodes];
+  // Deduplicate
+  const seen = new Set(); const all = [];
+  for (const c of allRaw) { if (!seen.has(c)) { seen.add(c); all.push(c); } }
+  // Pad to exactly 1000 if needed (shouldn't happen but just in case)
+  while (all.length < 1000) all.push('A01B 1/00');
+  all.length = 1000; // Trim to exactly 1000
   const counts = { unchanged: 0, auto_replaced: 0, review_deprecated: 0, review_scope: 0 };
   const results = [];
   for (const ipc of all) {
@@ -737,6 +745,20 @@ function runDemo() {
   document.getElementById('n-scope').textContent = counts.review_scope;
 
   const total = all.length;
+  const pct = (n) => (n / total * 100).toFixed(1) + '%';
+  // Update flow diagram percentages
+  document.getElementById('flow-unchanged').textContent = `不需處理 ${pct(counts.unchanged)}`;
+  document.getElementById('flow-auto').textContent = `自動替換 ${pct(counts.auto_replaced)}`;
+  document.getElementById('flow-deprecated').textContent = `需人工判斷 ${pct(counts.review_deprecated)}`;
+  document.getElementById('flow-scope').textContent = `需確認範圍 ${pct(counts.review_scope)}`;
+  // Update executive summary
+  document.getElementById('exec-pct').textContent = `~${Math.round(counts.unchanged / total * 100)}%`;
+  const reviewTotal = counts.review_deprecated + counts.review_scope;
+  document.getElementById('exec-text-unchanged').textContent = pct(counts.unchanged);
+  document.getElementById('exec-text-auto').textContent = pct(counts.auto_replaced);
+  document.getElementById('exec-text-review').textContent = pct(reviewTotal);
+  // Update stats card title with actual count
+  document.querySelector('#stats-row').parentElement.querySelector('h2').textContent = `模擬分析結果（${total.toLocaleString()} 筆範例資料）`;
   const barData = [
     { label: '不需處理', cls: 'unchanged', count: counts.unchanged },
     { label: '自動替換', cls: 'auto', count: counts.auto_replaced },
@@ -775,11 +797,13 @@ function renderTable(rows) {
       resultCol = `<span class="new-code">${r.result}</span>`;
     } else if (r.action === 'review_deprecated') {
       resultCol = `候選: <span class="new-code">${r.candidates}</span>`;
-      // Show source + candidates with names
+      // Show source + candidates with names + version
       const dests = r.destsWithNames || [];
       if (dests.length > 0) {
         const srcName = r.srcName || '';
+        const ver = r.version || '';
         detailCol = `<div style="font-size:0.75rem">` +
+          (ver ? `<div style="color:#999;font-size:0.7rem;margin-bottom:3px">版本：${ver}</div>` : '') +
           `<div style="background:#fff3e0;padding:3px 8px;border-radius:4px;margin-bottom:4px">` +
             `<span style="font-weight:600;color:#e65100">${r.original.substring(0,4)}</span>` +
             (srcName ? ` <span style="color:#888">${srcName}</span>` : '') +
@@ -803,7 +827,9 @@ function renderTable(rows) {
       if (srcT || dstT) {
         const srcSub = getSubName(r.original);
         const dstSub = dst ? getSubName(dst) : '';
-        detailCol = `<div style="display:flex;gap:6px;align-items:stretch">` +
+        const ver = r.version || '';
+        detailCol = (ver ? `<div style="font-size:0.7rem;color:#999;margin-bottom:3px">版本：${ver}</div>` : '') +
+        `<div style="display:flex;gap:6px;align-items:stretch">` +
           `<div style="flex:1;background:#fce4ec;padding:4px 8px;border-radius:4px;font-size:0.75rem">` +
             `<div style="font-weight:600;color:#c62828">${r.original}</div>` +
             (srcSub ? `<div style="color:#888">${srcSub}</div>` : '') +
