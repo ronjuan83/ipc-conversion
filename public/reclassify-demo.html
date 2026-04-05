@@ -69,6 +69,10 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
 </head>
 <body>
 <div class="container">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <a href="./" style="text-decoration:none;color:#3498db;font-size:0.85rem">&larr; IPC 歷史查詢</a>
+    <a href="./" style="padding:6px 16px;background:#3498db;color:#fff;border-radius:6px;text-decoration:none;font-size:0.82rem">IPC 分類代碼歷史查詢</a>
+  </div>
   <h1>IPC 重分類分析系統</h1>
   <p class="subtitle">基於 WIPO IPC Concordance（1994-2026，24 版本），自動標記專利 IPC 異動狀態</p>
 
@@ -334,9 +338,10 @@ function runDemo() {
     } else if (r.action === 'review_scope') {
       resultCol = `可能: <span class="new-code">${r.possible_new || ''}</span>`;
     }
+    const sub = r.original.trim().substring(0, 4);
     return `<tr>
       <td>${i + 1}</td>
-      <td><code>${r.original}</code></td>
+      <td><a href="./?ipc=${sub}" style="color:#2c3e50;text-decoration:none" title="在 IPC 查詢系統中搜尋"><code>${r.original}</code></a></td>
       <td>${badgeMap[r.action]}</td>
       <td>${resultCol}</td>
       <td style="font-size:0.78rem;color:#777">${r.detail || '—'}</td>
