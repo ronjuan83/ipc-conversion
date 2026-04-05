@@ -110,10 +110,15 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
 </style>
 </head>
 <body>
-<div class="container">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-    <a href="./" style="text-decoration:none;color:#3498db;font-size:0.85rem">&larr; IPC 歷史查詢</a>
-    <a href="./" style="padding:6px 16px;background:#3498db;color:#fff;border-radius:6px;text-decoration:none;font-size:0.82rem">IPC 分類代碼歷史查詢</a>
+<nav style="background:#fff;border-bottom:1px solid #e0e0e0;padding:10px 0;position:sticky;top:0;z-index:100">
+  <div style="max-width:960px;margin:0 auto;padding:0 16px;display:flex;align-items:center;gap:16px">
+    <span style="font-weight:700;color:#2c3e50;font-size:0.95rem">IPC 工具</span>
+    <a href="./" style="text-decoration:none;color:#666;font-size:0.85rem;padding:4px 10px;border-radius:4px">歷史查詢</a>
+    <a href="./reclassify.html" style="text-decoration:none;color:#fff;font-size:0.85rem;padding:4px 10px;border-radius:4px;background:#3498db;font-weight:600">批次重分類</a>
+    <a href="https://github.com/ronjuan83/ipc-search" target="_blank" style="text-decoration:none;color:#999;font-size:0.8rem;margin-left:auto">GitHub</a>
+  </div>
+</nav>
+<div class="container" style="padding-top:16px">
   </div>
   <h1>IPC 重分類分析系統</h1>
   <p class="subtitle">基於 WIPO IPC Concordance（1994-2026，24 版本），自動標記專利 IPC 異動狀態</p>
@@ -401,6 +406,40 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
     </div>
   </div>
 
+  <!-- Upload CSV -->
+  <div class="card">
+    <h2>上傳檔案分析</h2>
+    <p style="font-size:0.85rem;color:#555;margin-bottom:12px">
+      上傳 CSV 檔案，系統將自動標記每筆專利的 IPC 異動狀態。處理完全在瀏覽器端執行，資料不會上傳到伺服器。
+    </p>
+    <div id="upload-area" style="border:2px dashed #ccc;border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:border 0.2s;margin-bottom:12px"
+         ondragover="event.preventDefault();this.style.borderColor='#3498db'"
+         ondragleave="this.style.borderColor='#ccc'"
+         ondrop="event.preventDefault();this.style.borderColor='#ccc';handleUpload(event.dataTransfer.files[0])"
+         onclick="document.getElementById('file-input').click()">
+      <div style="font-size:1.2rem;margin-bottom:4px">📂 拖入 CSV 檔案或點擊選取</div>
+      <div style="font-size:0.78rem;color:#888">支援 CSV / TSV，需包含 IPC 欄位</div>
+      <input type="file" id="file-input" accept=".csv,.tsv,.txt" style="display:none" onchange="handleUpload(this.files[0])">
+    </div>
+    <details style="margin-bottom:12px">
+      <summary style="cursor:pointer;font-size:0.85rem;color:#3498db;font-weight:600">CSV 格式範例與說明</summary>
+      <div style="margin-top:8px;font-size:0.82rem;color:#555">
+        <p style="margin-bottom:8px">檔案需為 UTF-8 編碼的 CSV，至少包含一個 IPC 欄位。欄位名稱可自訂（上傳後可選擇）。</p>
+        <div style="background:#f8f9fa;border-radius:6px;padding:10px;font-family:monospace;font-size:0.78rem;overflow-x:auto;margin-bottom:8px">
+公告號,申請日,IPC,申請人<br>
+I100001,20050101,H01L 21/00,台積電<br>
+I100002,20100315,"C13C 3/02; C13D 5/00",糖業公司<br>
+I100003,20180601,F24J 2/46,太陽能公司<br>
+I100004,20200801,G06F 3/01,科技公司
+        </div>
+        <p>支援的 IPC 格式：<code>H01L 21/677</code>、<code>H01L21/677</code>（無空格）、<code>H01L 21/677(2006.01)</code>（附版本）。多碼可用逗號、分號或換行分隔。</p>
+        <a href="#" onclick="downloadSample();return false" style="color:#3498db;font-weight:600">⬇ 下載範例 CSV 檔案</a>
+      </div>
+    </details>
+    <div id="upload-status" style="display:none"></div>
+    <div id="upload-result" style="display:none"></div>
+  </div>
+
   <!-- Interactive -->
   <div class="card">
     <h2>即時查詢 — 輸入 IPC 代碼</h2>
@@ -447,7 +486,7 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
   </div>
 
   <p style="text-align:center;color:#999;font-size:0.78rem;margin-top:20px">
-    資料來源：WIPO IPC Concordance（IPC v6 → 2026.01）｜ <a href="./" style="color:#3498db">IPC 搜尋工具</a>
+    資料來源：WIPO IPC Concordance（IPC v6 → 2026.01）
   </p>
 </div>
 
@@ -844,27 +883,27 @@ function renderTable(rows) {
       const dst = r.possible_new || '';
       resultCol = `可能: <span class="new-code">${dst}</span>`;
       // Build comparison detail with titles
-      const srcT = r.srcTitle || '';
-      const dstT = r.dstTitle || '';
-      if (srcT || dstT) {
-        const srcSub = getSubName(r.original);
-        const dstSub = dst ? getSubName(dst) : '';
-        const ver = r.version || '';
-        detailCol = (ver ? `<div style="font-size:0.7rem;color:#999;margin-bottom:3px">版本：${ver}</div>` : '') +
-        `<div style="display:flex;gap:6px;align-items:stretch">` +
-          `<div style="flex:1;background:#fce4ec;padding:4px 8px;border-radius:4px;font-size:0.75rem">` +
-            `<div style="font-weight:600;color:#c62828">${r.original}</div>` +
-            (srcSub ? `<div style="color:#888">${srcSub}</div>` : '') +
-            (srcT ? `<div style="color:#555">${srcT}</div>` : '') +
-          `</div>` +
-          `<div style="display:flex;align-items:center;color:#999;font-size:0.9rem">→</div>` +
-          `<div style="flex:1;background:#e3f2fd;padding:4px 8px;border-radius:4px;font-size:0.75rem">` +
-            `<div style="font-weight:600;color:#1565c0">${dst}</div>` +
-            (dstSub ? `<div style="color:#888">${dstSub}</div>` : '') +
-            (dstT ? `<div style="color:#555">${dstT}</div>` : '') +
-          `</div>` +
-        `</div>`;
-      }
+      // Compute titles at render time (not from classify cache, since titles may load later)
+      const p = parseIPC(r.original);
+      const srcT = p ? (getTitle(p.group || '') || getTitle(p.sub + ' ' + (p.main||0) + '/00')) : '';
+      const dstT = getTitle(dst);
+      const srcSub = getSubName(r.original);
+      const dstSub = dst ? getSubName(dst) : '';
+      const ver = r.version || '';
+      detailCol = (ver ? `<div style="font-size:0.7rem;color:#999;margin-bottom:3px">版本：${ver}</div>` : '') +
+      `<div style="display:flex;gap:6px;align-items:stretch">` +
+        `<div style="flex:1;background:#fce4ec;padding:4px 8px;border-radius:4px;font-size:0.75rem">` +
+          `<div style="font-weight:600;color:#c62828">${r.original}</div>` +
+          (srcSub ? `<div style="color:#888">${srcSub}</div>` : '') +
+          (srcT ? `<div style="color:#555">${srcT}</div>` : '') +
+        `</div>` +
+        `<div style="display:flex;align-items:center;color:#999;font-size:0.9rem">→</div>` +
+        `<div style="flex:1;background:#e3f2fd;padding:4px 8px;border-radius:4px;font-size:0.75rem">` +
+          `<div style="font-weight:600;color:#1565c0">${dst}</div>` +
+          (dstSub ? `<div style="color:#888">${dstSub}</div>` : '') +
+          (dstT ? `<div style="color:#555">${dstT}</div>` : '') +
+        `</div>` +
+      `</div>`;
     }
     const sub = r.original.trim().substring(0, 4);
     return `<tr>
@@ -1000,6 +1039,154 @@ function _renderClassifyResult(code) {
     </div>`;
 }
 document.getElementById('ipc-input').addEventListener('keydown', e => { if (e.key === 'Enter') tryClassify(); });
+
+// === CSV Upload ===
+function downloadSample() {
+  const csv = `公告號,申請日,IPC,申請人\nI100001,20050101,H01L 21/00,台積電\nI100002,20100315,"C13C 3/02; C13D 5/00",糖業公司\nI100003,20180601,F24J 2/46,太陽能公司\nI100004,20200801,G06F 3/01,科技公司\nI100005,20150901,"H01L 21/677; H01L 33/08",聯電\nI100006,20190101,"A01B 1/00; B23K 26/00",機械公司\nI100007,20220501,G06K 9/62,影像公司\nI100008,20100101,"F21M 3/00; F21H 5/00",照明公司\n`;
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ipc_sample.csv';
+  a.click();
+}
+
+function handleUpload(file) {
+  if (!file) return;
+  const status = document.getElementById('upload-status');
+  status.style.display = 'block';
+  status.innerHTML = `<div style="color:#3498db">正在讀取 ${file.name}...</div>`;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    const delimiter = file.name.endsWith('.tsv') ? '\t' : ',';
+    parseAndAnalyze(text, delimiter, file.name);
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseAndAnalyze(text, delimiter, filename) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) {
+    document.getElementById('upload-status').innerHTML = '<div style="color:#c62828">錯誤：檔案為空或只有標題列</div>';
+    return;
+  }
+
+  // Parse header
+  const headers = parseCSVLine(lines[0], delimiter);
+
+  // Find IPC column — ask user if multiple candidates
+  const ipcCandidates = headers.filter(h => /ipc|分類|class/i.test(h));
+  let ipcCol = ipcCandidates[0] || null;
+  const ipcIdx = ipcCol ? headers.indexOf(ipcCol) : -1;
+
+  if (ipcIdx === -1) {
+    // Show column picker
+    document.getElementById('upload-status').innerHTML = `
+      <div style="margin-bottom:8px;color:#555">請選擇 IPC 欄位：</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">
+        ${headers.map((h, i) => `<button onclick="runAnalysis('${filename}',${i})" style="padding:4px 10px;border:1px solid #3498db;border-radius:4px;background:#fff;color:#3498db;cursor:pointer;font-size:0.82rem">${h}</button>`).join('')}
+      </div>
+    `;
+    window._uploadData = { lines, headers, delimiter };
+    return;
+  }
+  doAnalysis(lines, headers, delimiter, ipcIdx);
+}
+
+function runAnalysis(filename, colIdx) {
+  const { lines, headers, delimiter } = window._uploadData;
+  doAnalysis(lines, headers, delimiter, colIdx);
+}
+
+function doAnalysis(lines, headers, delimiter, ipcIdx) {
+  const status = document.getElementById('upload-status');
+  const resultDiv = document.getElementById('upload-result');
+  status.innerHTML = `<div style="color:#3498db">分析中... ${lines.length - 1} 筆資料</div>`;
+
+  const counts = { unchanged: 0, auto_replaced: 0, review_deprecated: 0, review_scope: 0 };
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCSVLine(lines[i], delimiter);
+    const ipcValue = cols[ipcIdx] || '';
+    if (!ipcValue.trim()) continue;
+
+    // Parse multi-IPC field
+    const codes = ipcValue.split(/[,;\n\r|]+/).map(c => c.trim()).filter(Boolean);
+    let rowAction = 'unchanged';
+    const rowResults = [];
+    for (const code of codes) {
+      const r = classify(code);
+      rowResults.push(r);
+      if (r.action === 'review_scope') rowAction = 'review_scope';
+      else if (r.action === 'review_deprecated' && rowAction !== 'review_scope') rowAction = 'review_deprecated';
+      else if (r.action === 'auto_replaced' && rowAction === 'unchanged') rowAction = 'auto_replaced';
+    }
+    counts[rowAction]++;
+    rows.push({ cols, ipcValue, rowAction, rowResults });
+  }
+
+  const total = rows.length;
+  const pct = n => (n / total * 100).toFixed(1) + '%';
+
+  status.innerHTML = `<div style="color:#2e7d32;font-weight:600">✅ 分析完成：${total} 筆</div>`;
+
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0">
+      <div style="text-align:center;padding:10px;border-radius:8px;background:#e8f5e9"><div style="font-size:1.3rem;font-weight:700;color:#2e7d32">${counts.unchanged}</div><div style="font-size:0.72rem;color:#666">不需處理 ${pct(counts.unchanged)}</div></div>
+      <div style="text-align:center;padding:10px;border-radius:8px;background:#e3f2fd"><div style="font-size:1.3rem;font-weight:700;color:#1565c0">${counts.auto_replaced}</div><div style="font-size:0.72rem;color:#666">自動替換 ${pct(counts.auto_replaced)}</div></div>
+      <div style="text-align:center;padding:10px;border-radius:8px;background:#fff3e0"><div style="font-size:1.3rem;font-weight:700;color:#e65100">${counts.review_deprecated}</div><div style="font-size:0.72rem;color:#666">需人工判斷 ${pct(counts.review_deprecated)}</div></div>
+      <div style="text-align:center;padding:10px;border-radius:8px;background:#fce4ec"><div style="font-size:1.3rem;font-weight:700;color:#c62828">${counts.review_scope}</div><div style="font-size:0.72rem;color:#666">需確認範圍 ${pct(counts.review_scope)}</div></div>
+    </div>
+    <button onclick="exportResults()" style="padding:6px 16px;background:#2e7d32;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:600">⬇ 匯出分析結果 CSV</button>
+  `;
+
+  // Store for export
+  window._uploadResults = { headers, rows, ipcIdx };
+}
+
+function exportResults() {
+  const { headers, rows, ipcIdx } = window._uploadResults;
+  const outHeaders = [...headers, 'reclassify_action', 'reclassify_result', 'reclassify_candidates', 'reclassify_detail'];
+  let csv = outHeaders.join(',') + '\n';
+  for (const row of rows) {
+    const action = row.rowAction;
+    const results = row.rowResults;
+    const resultCodes = results.map(r => r.result || r.original).join('; ');
+    const candidates = results.map(r => r.candidates || r.possible_new || '').filter(Boolean).join('; ');
+    const details = results.map(r => r.detail || '').filter(Boolean).join('; ');
+    const outCols = [...row.cols];
+    while (outCols.length < headers.length) outCols.push('');
+    outCols.push(action, action === 'auto_replaced' ? resultCodes : '', candidates, details);
+    csv += outCols.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',') + '\n';
+  }
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'reclassify_result.csv';
+  a.click();
+}
+
+function parseCSVLine(line, delimiter) {
+  const result = [];
+  let current = '';
+  let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuote) {
+      if (ch === '"' && line[i+1] === '"') { current += '"'; i++; }
+      else if (ch === '"') { inQuote = false; }
+      else { current += ch; }
+    } else {
+      if (ch === '"') { inQuote = true; }
+      else if (ch === delimiter) { result.push(current.trim()); current = ''; }
+      else { current += ch; }
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
 </script>
 </body>
 </html>
