@@ -440,6 +440,11 @@ body {
   color: var(--badge-active-text);
 }
 
+.badge-moved {
+  background: #fff3cd;
+  color: #856404;
+}
+
 .badge-new {
   background: var(--badge-new-bg);
   color: var(--badge-new-text);

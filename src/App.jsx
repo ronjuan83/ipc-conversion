@@ -276,6 +276,12 @@ function StatusBadge({ code, data, onSearch }) {
   if (intro) {
     return <span className="badge badge-new">新增於 {intro}</span>
   }
+  const entry = data.subclass_index[code]
+  if (entry && ((entry.donated && entry.donated.length > 0) || (entry.received && entry.received.length > 0))) {
+    const dCount = (entry.donated || []).length
+    const rCount = (entry.received || []).length
+    return <span className="badge badge-moved">有版本異動 ({dCount}出 {rCount}入)</span>
+  }
   return <span className="badge badge-active">現行有效</span>
 }
 
@@ -1893,7 +1899,7 @@ export default function App() {
       <footer className="app-footer">
         資料來源：WIPO IPC 調和表（IPC v6 → 2026.01）｜
         <a href="https://github.com/ronjuan83/ipc-search" target="_blank" rel="noreferrer">GitHub</a>
-        ｜<a href={`${import.meta.env.BASE_URL}reclassify-demo.html`}>批次重分類</a>
+        ｜<a href={`${import.meta.env.BASE_URL}reclassify.html`}>批次重分類分析</a>
       </footer>
     </div>
   )
