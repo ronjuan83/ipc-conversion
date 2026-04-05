@@ -1297,13 +1297,13 @@ function TechClassifier({ onSearch }) {
       const isInTipo = !isExactKw && !isSubstrKw && tipoDesc.includes(q)
 
       if (isExactKw) {
-        score += 200; matchedTerms.push(q)
+        score += 300; matchedTerms.push(q)
       } else if (isExactName) {
-        score += 180; matchedTerms.push(q)
+        score += 150; matchedTerms.push(q)
       } else if (isSubstrKw) {
         score += 100; matchedTerms.push(q)
       } else if (isInTipo) {
-        score += 60; matchedTerms.push(q)
+        score += 50; matchedTerms.push(q)
       }
 
       // Term frequency bonus: how often does the query appear in tipoDesc?
