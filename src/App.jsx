@@ -1143,63 +1143,67 @@ function TechClassifier({ onSearch }) {
       .catch(() => {})
   }, [])
 
-  // Build Fuse.js index: merge group titles + tech keywords + ipc_names
-  const fuse = useMemo(() => {
+  // Build TWO Fuse.js indexes:
+  // 1. fuseEn: 81K group titles (for English keywords)
+  // 2. fuseZh: 664 tech_keywords (for Chinese keywords, fast)
+  const fuseEn = useMemo(() => {
     if (!groupTitles) return null
     const kwMap = {}
     if (techKeywords) techKeywords.forEach(t => { kwMap[t.code] = t })
-
     const corpus = groupTitles.map(g => {
       const kw = kwMap[g.sub]
-      return {
-        code: g.code,
-        sub: g.sub,
-        title: g.title,
-        subName: getSubclassName(g.sub),
-        label: kw?.label ?? '',
-        keywords: kw?.keywords ?? [],
-      }
+      return { code: g.code, sub: g.sub, title: g.title, subName: getSubclassName(g.sub), label: kw?.label ?? '', keywords: kw?.keywords ?? [] }
     })
     return new Fuse(corpus, {
-      keys: [
-        { name: 'code', weight: 5 },      // IPC code exact match
-        { name: 'title', weight: 3 },      // WIPO official group title (main signal)
-        { name: 'subName', weight: 1.5 },  // subclass Chinese name
-        { name: 'label', weight: 1.5 },    // tech keyword label
-        { name: 'keywords', weight: 2 },   // tech keywords (Chinese terms)
-      ],
-      threshold: 0.5,
-      minMatchCharLength: 1,
-      ignoreLocation: true,
-      includeScore: true,
-      shouldSort: true,
+      keys: [{ name: 'code', weight: 5 }, { name: 'title', weight: 3 }, { name: 'subName', weight: 1.5 }, { name: 'label', weight: 1.5 }, { name: 'keywords', weight: 2 }],
+      threshold: 0.5, minMatchCharLength: 1, ignoreLocation: true, includeScore: true, shouldSort: true,
     })
   }, [groupTitles, techKeywords])
 
+  const fuseZh = useMemo(() => {
+    if (!techKeywords) return null
+    const corpus = techKeywords.map(t => ({
+      code: t.code, sub: t.code, label: t.label, keywords: t.keywords, subName: getSubclassName(t.code),
+    }))
+    return new Fuse(corpus, {
+      keys: [{ name: 'code', weight: 4 }, { name: 'label', weight: 3 }, { name: 'keywords', weight: 4 }, { name: 'subName', weight: 2 }],
+      threshold: 0.4, minMatchCharLength: 1, ignoreLocation: true, includeScore: true, shouldSort: true,
+    })
+  }, [techKeywords])
+
   useEffect(() => {
     const q = techInput.trim()
-    if (!q || !fuse) { setSuggestions([]); return }
-
-    const isLong = q.length > 50
-
-    // Long text → skip Fuse.js, use IPCCAT only
-    if (isLong) { setSuggestions([]); return }
+    if (!q) { setSuggestions([]); return }
+    if (q.length > 50) { setSuggestions([]); return } // long text → IPCCAT only
 
     const timer = setTimeout(() => {
-      const results = fuse.search(q, { limit: 50 })
-      // Deduplicate by subclass — show best match per subclass
+      // Search both indexes and merge results
+      const allResults = []
+      if (fuseZh) {
+        fuseZh.search(q, { limit: 10 }).forEach(r => {
+          allResults.push({ item: r.item, score: r.score, src: 'zh' })
+        })
+      }
+      if (fuseEn) {
+        fuseEn.search(q, { limit: 20 }).forEach(r => {
+          allResults.push({ item: r.item, score: r.score, src: 'en' })
+        })
+      }
+      // Sort by score (lower = better)
+      allResults.sort((a, b) => (a.score || 1) - (b.score || 1))
+      // Deduplicate by subclass
       const seenSub = new Set()
-      const deduped = results.filter(({ item }) => {
+      const deduped = allResults.filter(({ item }) => {
         if (seenSub.has(item.sub)) return false
         seenSub.add(item.sub)
         return true
       }).slice(0, 6)
       setSuggestions(deduped.map(({ item, score }) => ({
-        code: item.code, title: item.title, subName: item.subName, score, hits: 1
+        code: item.code, title: item.label || item.title || item.subName, subName: item.subName, score, hits: 1
       })))
     }, 300)
     return () => clearTimeout(timer)
-  }, [techInput, fuse])
+  }, [techInput, fuseEn, fuseZh])
 
   // IPCCAT API call (for long text >50 chars OR any input >3 chars with Chinese)
   useEffect(() => {
