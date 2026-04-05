@@ -1893,7 +1893,7 @@ export default function App() {
       <footer className="app-footer">
         資料來源：WIPO IPC 調和表（IPC v6 → 2026.01）｜
         <a href="https://github.com/ronjuan83/ipc-search" target="_blank" rel="noreferrer">GitHub</a>
-        ｜<a href={`${import.meta.env.BASE_URL}reclassify-demo.html`}>批次重分類 Demo</a>
+        ｜<a href={`${import.meta.env.BASE_URL}reclassify-demo.html`}>批次重分類</a>
       </footer>
     </div>
   )
