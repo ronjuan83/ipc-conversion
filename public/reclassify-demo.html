@@ -789,7 +789,7 @@ function runDemo() {
 
 function renderTable(rows) {
   const badgeMap = window._badgeMap;
-  document.getElementById('table-count').textContent = `顯示 ${rows.length} 筆`;
+  // count label is set by filterTable
   document.getElementById('sample-body').innerHTML = rows.map((r, i) => {
     let resultCol = '';
     let detailCol = r.detail || '—';
@@ -867,17 +867,20 @@ function filterTable(mode) {
   let filtered;
   if (mode === 'B') {
     filtered = all.filter(r => r.original.trim().startsWith('B'));
-    // Show changed first, then unchanged
-    const changed = filtered.filter(r => r.action !== 'unchanged');
-    const unch = filtered.filter(r => r.action === 'unchanged').slice(0, 20);
-    filtered = [...changed, ...unch];
   } else if (mode === 'changed') {
     filtered = all.filter(r => r.action !== 'unchanged');
   } else {
-    // All: show changed first, then sample of unchanged
-    const changed = all.filter(r => r.action !== 'unchanged');
-    const unch = all.filter(r => r.action === 'unchanged').slice(0, 15);
-    filtered = [...changed, ...unch];
+    filtered = all;
+  }
+  // Sort: changed first, then unchanged
+  filtered.sort((a, b) => {
+    const order = { auto_replaced: 0, review_deprecated: 1, review_scope: 2, unchanged: 3 };
+    return (order[a.action] ?? 9) - (order[b.action] ?? 9);
+  });
+  const countLabel = document.getElementById('table-count');
+  if (countLabel) {
+    const changed = filtered.filter(r => r.action !== 'unchanged').length;
+    countLabel.textContent = `顯示 ${filtered.length} / ${all.length} 筆（其中 ${changed} 筆有異動）`;
   }
   renderTable(filtered);
 }
