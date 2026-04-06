@@ -1,9 +1,9 @@
-# ipc-search — Claude 導航手冊
+# ipc-conversion — Claude 導航手冊
 
 ## 專案概覽
 
-- **網址**：https://ronjuan83.github.io/ipc-search/
-- **GitHub**：https://github.com/ronjuan83/ipc-search
+- **網址**：https://ronjuan83.github.io/ipc-conversion/
+- **GitHub**：https://github.com/ronjuan83/ipc-conversion
 - **技術棧**：React 19 + Vite 8，部署於 GitHub Pages（gh-pages 分支）
 - **功能**：IPC 分類代碼歷史查詢（跨版本異動，涵蓋 IPC v6 → 2026.01 共 24 版本）
 
@@ -24,7 +24,7 @@ public/
   IPC_CONCORDANCE_MAP.md   IPC 版本異動詳細文件
 
 .github/workflows/deploy.yml   push main → 自動 build → peaceiris 推送 gh-pages
-vite.config.js                 base: '/ipc-search/'
+vite.config.js                 base: '/ipc-conversion/'
 ```
 
 ---
@@ -49,7 +49,7 @@ vite.config.js                 base: '/ipc-search/'
 ## 常用指令
 
 ```bash
-npm run dev        # 本地預覽 http://localhost:5174/ipc-search/
+npm run dev        # 本地預覽 http://localhost:5174/ipc-conversion/
 npm run build      # 產出 dist/
 git add src/ public/ && git commit -m "說明" && git push  # 部署（Actions 自動處理）
 ```
@@ -76,13 +76,13 @@ with open('docs/ipc_subclass_index.json') as f:
     idx = json.load(f)
 
 data = {'introduced_in': INTRODUCED_IN, 'deprecated_to': DEPRECATED_TO, 'subclass_index': idx}
-with open('../ipc-search/public/ipc_data.json', 'w') as f:
+with open('../ipc-conversion/public/ipc_data.json', 'w') as f:
     json.dump(data, f, ensure_ascii=False)
 "
 ```
 
 或直接複製：
 ```bash
-cp ~/Downloads/patent-query/docs/ipc_subclass_index.json ~/Downloads/ipc-search/public/
+cp ~/Downloads/patent-query/docs/ipc_subclass_index.json ~/Downloads/ipc-conversion/public/
 # 然後重新執行 generate_ipc_data.py 或手動更新 ipc_data.json
 ```
