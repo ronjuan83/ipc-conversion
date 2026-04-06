@@ -97,6 +97,33 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
   </div>
 
   <div class="card">
+    <h2>模擬分析（1,000 筆隨機 IPC）</h2>
+    <p style="font-size:0.85rem;color:#555;margin-bottom:12px">
+      以 IPC 分布加權隨機取樣 1,000 筆專利代碼，預估各類佔比。
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px" id="sim-stats"></div>
+    <div style="margin-bottom:12px" id="sim-bar"></div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+      <button onclick="simFilter('all')" class="filter-btn active" style="border-color:#3498db;color:#3498db" id="sf-all">全部</button>
+      <button onclick="simFilter('A')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="sf-A">A</button>
+      <button onclick="simFilter('B')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="sf-B">B</button>
+      <button onclick="simFilter('C')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="sf-C">C</button>
+      <button onclick="simFilter('D')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="sf-D">D</button>
+      <button onclick="simFilter('E')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="sf-E">E</button>
+      <button onclick="simFilter('F')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="sf-F">F</button>
+      <button onclick="simFilter('G')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="sf-G">G</button>
+      <button onclick="simFilter('H')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="sf-H">H</button>
+      <span id="sim-count" style="font-size:0.78rem;color:#888;margin-left:8px"></span>
+    </div>
+    <div class="scroll-box" style="max-height:400px">
+      <table class="sample-table">
+        <thead><tr><th>#</th><th>IPC 代碼</th><th>Class</th><th>說明</th><th>狀態</th></tr></thead>
+        <tbody id="sim-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>全部 Class 一覽</h2>
     <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
       <button onclick="filterAll('all')" class="filter-btn active" style="border-color:#3498db;color:#3498db" id="fb-all">全部</button>
@@ -385,6 +412,164 @@ function doUploadAnalysis(lines, delim, ipcIdx) {
       <div style="text-align:center;padding:10px;border-radius:8px;background:#fff3e0"><div style="font-size:1.3rem;font-weight:700;color:#e65100">${changed}</div><div style="font-size:0.72rem;color:#666">有異動 ${(changed/total*100).toFixed(1)}%</div></div>
     </div>`;
 }
+
+// === Simulation 1000 samples ===
+const SAMPLE_CODES = [
+  'F02B 37/14','B32B 15/088','F16K 15/04','E02D 1/10','A61Q 8/895','E04C 19/27','F23K 5/06','C07F 50/12','B44F 11/04','F21Y 111/00','B09C 1/00','A61K 36/62',
+  'G06D 1/00','G01H 5/00','A99Z 31/00','D06N 7/00','D21J 1/08','A24D 1/20','H05K 13/719','C01C 3/14','B21H 17/00','F16T 1/20','E05B 81/10','F23G 5/38',
+  'C01D 15/06','F16S 1/00','B28B 15/76','C06C 1/26','H01S 5/02','B27C 3/08','G10G 7/00','B42F 13/36','F25D 3/02','C05G 3/06','C23F 13/22','A41D 10/00',
+  'F01M 9/00','A44C 27/00','D01B 1/00','F16D 65/22','F25J 3/00','B60K 28/00','A01L 3/00','H04J 7/182','H01K 11/00','G06T 7/571','B25C 1/40','D03C 1/00',
+  'E03B 1/00','A62C 99/00','B61L 23/18','G10B 1/02','F23D 5/02','D02H 51/00','F04B 1/205','D01B 7/00','H04H 60/98','B25C 33/02','H10K 59/123','G21D 1/04',
+  'B41F 3/54','A21B 1/46','E02D 12/20','F21S 31/02','A45C 3/00','A45D 27/46','F15B 9/16','B01B 1/02','B31F 7/02','C07B 33/00','F03D 80/10','C07G 11/00',
+  'A43C 15/06','G01S 15/10','B24C 47/48','B03C 3/014','C11D 31/17','G01W 1/02','A41F 9/00','A01P 17/00','B21G 3/16','B27G 9/00','A43D 1/00','H05H 5/02',
+  'B60F 5/02','F23G 5/04','B60T 17/22','F24J 2/28','A42C 5/00','H01F 19/02','A42B 1/244','A45C 13/38','C06D 3/00','E21F 8/90','D06Q 15/02','B26B 21/00',
+  'B31F 1/07','F16B 35/14','B61B 1/00','C10K 1/08','A46B 19/04','B42C 1/12','G10H 101/12','B21J 15/00','E05C 1/00','F15C 1/20','H01L 21/763','B42D 7/00',
+  'D06B 17/02','E04B 2/24','B25D 17/10','C22F 1/00','A61N 2/02','A24B 13/00','F01D 11/02','F24H 9/20','C08H 1/02','A47B 96/16','A23L 33/105','D06C 15/00',
+  'A24B 1/02','G21F 21/00','F15D 43/16','G10F 5/06','F25B 35/00','H04J 3/22','A22B 3/02','G01M 12/00','B21L 3/12','G09B 21/06','B25J 21/24','B60R 21/20',
+  'A22C 18/00','B62K 5/003','B60H 17/70','F16S 5/00','B62D 13/16','G10K 11/178','E01F 15/02','A62C 3/00','F23H 7/00','E04C 17/00','C01D 15/06','B41C 1/02',
+  'C30B 3/02','C08F 4/6392','B61B 35/04','G21J 5/00','C07H 31/719','D06M 11/80','F04D 29/063','F25B 41/32','C06C 15/00','B60M 3/02','D99Z 36/53','C09F 9/00',
+  'G01Q 30/02','B60N 2/06','G03F 25/00','B27B 15/00','A22C 21/00','E05F 3/00','C07K 33/84','F21M 3/18','B31B 15/90','F42D 21/00','G01G 23/01','A41C 13/012',
+  'C10C 7/00','H10K 59/124','E05C 19/10','G04F 31/327','G16B 5/20','B41B 9/40','B44B 11/02','B44F 23/00','B29C 48/16','G16Z 99/00','B07B 32/240','B07C 11/00',
+  'C07J 73/00','C12C 1/15','G05B 7/00','H03K 3/59','C12Q 1/6823','F26B 5/02','F25B 49/00','B27G 19/08','A23L 5/44','F16C 6/024','B21G 1/10','H05G 1/00',
+  'G21C 13/22','F02N 19/02','B23D 45/18','B62H 5/00','B63G 57/00','F25D 21/00','G05B 1/08','F25C 3/04','B27F 1/00','F27D 17/10','G06D 1/00','B31F 7/00',
+  'A63J 5/12','F21Y 105/16','E04B 1/82','F42D 4/24','A62B 29/00','D21F 3/06','H02M 1/32','E02F 3/00','F21H 7/00','E04D 3/362','G01J 5/48','C08F 130/00',
+  'C22F 1/00','G06V 10/52','C09H 3/00','F21W 102/19','F24F 8/97','F41A 8/00','G04F 3/06','B62M 1/24','B60B 25/04','F25D 23/00','A23L 1/318','C13D 3/00',
+  'B64D 27/34','D06G 1/00','A47L 5/32','D06M 23/00','C12L 9/00','C10L 1/183','B60C 41/00','B31C 50/240','D06Q 23/08','H10K 50/82','F21H 1/04','B41F 17/13',
+  'B61H 5/00','F16L 23/08','F24F 8/50','E03C 1/324','B25B 27/30','B23Q 63/02','D02G 1/00','H04H 20/89','F21K 9/61','A61F 2/76','C12R 1/93','B23Q 17/00',
+  'H02H 11/60','G04D 7/00','A46B 13/00','B06B 1/08','H10W 76/138','E04C 19/45','F42B 3/195','G21J 58/73','E02C 1/00','D21H 27/12','H03H 3/05','E99Z 99/00',
+  'B09B 3/23','A47J 36/26','C10K 3/04','B60R 21/232','F21M 13/00','F16B 5/02','E02F 3/52','A63J 13/00','G21B 1/01','A43D 99/00','F25J 35/16','A63F 13/814',
+  'H02B 43/00','C14B 7/00','A23K 20/121','E04D 1/22','B28C 5/48','E01D 22/00','F16B 39/36','A23G 3/18','C30B 29/00','B23H 9/14','G03B 35/00','B65B 25/00',
+  'F15B 21/02','C07F 41/48','F04D 35/00','F28G 59/135','A47C 23/26','A63D 3/02','G04R 60/00','G09B 27/32','A41F 15/00','E21F 17/16','F28D 15/06','D05C 15/26',
+  'G10G 7/00','A23J 15/04','F21H 5/00','A01F 11/04','B27F 7/00','H03F 9/06','H02J 3/08','F21W 131/00','H05K 50/44','D05C 120/240','H01F 13/10','G08B 26/00',
+  'B64D 27/32','G03C 7/24','B60V 15/02','C10C 3/12','B63C 11/46','C10M 119/28','H05K 73/20','C01C 1/00','B61J 3/06','H01G 17/00','H10N 30/80','H04J 7/182',
+  'H04R 1/26','G10G 7/00','D01D 1/00','F23Q 55/00','H04W 72/0446','G01B 3/40','E21F 1/04','G06M 3/067','C01F 7/782','G09G 5/20','A45B 23/00','F25D 13/06',
+  'F28G 59/13','B21C 1/32','A24F 27/24','B66C 13/32','B31F 5/00','F16J 15/3244','B22C 23/00','E21B 33/16','H01J 23/18','C11C 5/02','B41J 33/58','G21B 1/01',
+  'C09H 20/49','F02P 9/00','B41N 1/24','H99Z 53/53','B30B 9/24','B60J 1/30','H05C 1/04','B44F 9/12','F24F 11/50','E04H 15/58','F01D 5/28','F27D 7/06',
+  'A61P 5/50','A23P 1/04','D99Z 36/53','G21H 3/02','B23K 5/20','G10H 101/10','G04G 7/00','H04N 5/76','G09G 3/3275','H04J 14/08','G07C 9/35','G01J 1/133',
+  'G01R 19/30','D02G 1/20','F16G 11/28','E01F 31/20','F16F 1/32','E21D 5/016','B27F 7/00','G21J 5/00','C07C 17/06','H03L 7/12','A63J 99/00','B02B 1/08',
+  'F16T 3/00','E01H 3/20','F03B 21/44','H02J 1/102','F16L 37/20','C10H 51/29','B66F 31/28','G21H 1/00','C05G 3/04','H03B 11/00','F04F 1/00','G01M 1/189',
+  'G01C 11/18','G04F 29/04','E01H 21/272','F41F 5/00','A01D 23/00','D03D 15/258','F04F 1/10','A01B 49/04','B62J 45/41','A41G 3/00','D01H 115/240','C12Q 1/6855',
+  'E02C 1/00','H02K 44/26','G01G 19/14','C10L 1/14','H99Z 99/00','F16F 7/249','G21K 1/06','B62J 15/00','B01B 1/02','C01D 7/10','B60H 17/70','A61D 14/00',
+  'G06M 3/08','F23M 3/10','C10H 45/85','B64F 5/00','C07B 47/00','C08L 23/20','H03B 11/00','A61K 31/32','C09H 1/04','D06N 7/00','F15D 33/18','G09B 1/36',
+  'H04K 3/00','B65F 7/00','B27J 5/00','B27F 5/00','G06E 1/00','F28C 17/056','G01W 1/18','E05C 1/00','E05D 1/06','B23D 37/00','B65G 21/16','D06C 13/00',
+  'B04C 19/14','F24T 10/30','C08F 16/36','B68B 7/00','H02N 1/08','B09B 3/38','A47F 9/00','C08C 3/02','B44F 3/00','C08L 67/00','F16F 3/00','F15B 13/52',
+  'C05C 1/00','A01G 17/18','F41F 3/00','B60Q 1/02','C21B 15/00','B01B 1/00','C21C 5/00','A46B 17/06','A21D 13/45','D21D 21/14','F21W 103/60','A63C 3/14',
+  'B22C 3/00','G05F 1/48','C09J 131/04','C09G 13/02','C05D 9/00','B27N 1/02','C23F 11/167','C23G 19/42','F23N 3/02','B29B 7/12','B25H 3/00','F28G 5/00',
+  'H03B 5/00','F27B 3/00','G08C 19/20','B07C 19/28','C09B 33/147','E02B 5/08','A46D 1/06','A23L 19/00','A47G 36/10','E03B 9/00','E01D 15/20','G21F 41/10',
+  'E04C 19/15','H03B 11/02','G02F 1/13357','C22B 1/243','B41G 7/00','D01B 1/22','B67B 7/00','C07J 27/73','G01K 1/143','B62L 11/00','B41K 1/30','B63C 7/30',
+  'B04B 5/10','H04S 3/02','B01F 25/422','D06Q 101/00','F15C 3/16','H01L 51/10','F16K 43/01','A21C 13/00','H03C 3/38','B24D 15/10','A47G 29/12','F41F 7/00',
+  'G10L 25/60','B63C 11/08','E03F 11/30','B23K 35/10','A24B 15/167','H04K 3/00','F25D 19/00','D02G 3/00','G21F 5/018','F16N 27/04','C11C 5/02','C22K 22/00',
+  'G03H 1/12','G09G 5/26','C12Q 1/6862','H02B 1/60','B60K 21/0132','C10F 7/02','G05D 107/60','G03C 1/005','C07H 49/04','B81B 15/16','B81C 23/00','H01K 13/00',
+  'G01N 11/56','B60V 8/67','G05B 27/00','E05F 1/08','B41M 5/40','H02B 35/00','A62C 2/22','B60T 13/135','C08C 1/06','A62C 37/50','D02J 7/00','D21J 1/08',
+  'B60W 50/029','B65F 3/22','B23P 17/02','H04W 72/54','D04G 5/00','C03B 13/00','F01P 3/04','F25J 25/234','B64B 1/66','F01P 11/08','A24B 15/00','G04B 3/10',
+  'H05F 25/13','G02B 5/74','F42B 10/00','B60T 8/66','B25G 5/00','H02B 33/666','H10D 48/50','A23C 19/024','B66D 35/24','B44D 3/04','G12B 21/22','B64U 60/55',
+  'F17D 5/00','C30B 6/293','A47B 96/16','B60Q 1/132','B62B 19/00','C10N 11/00','F16P 33/00','A24B 3/14','B44F 1/08','F16C 3/00','C25B 1/08','B04B 11/00',
+  'B01J 35/56','B66D 7/18','B08B 5/64','B68G 4/30','B03D 10/53','B61C 15/12','H03K 19/16','C21B 5/06','A63F 13/86','B27K 3/34','F17D 1/08','A63H 23/16',
+  'B22C 3/00','H10K 85/30','B64C 27/32','G16H 20/40','G01G 16/02','A63J 13/00','B29L 17/00','B66F 3/44','G01W 1/08','E05F 11/14','B61J 3/06','C07H 227/38',
+  'A99Z 99/00','A46D 9/02','C25B 9/02','F02N 9/00','H04M 1/82','G99Z 99/00','C25F 3/00','B21B 21/00','H03D 3/00','G06K 13/22','F01D 1/34','E21C 37/06',
+  'F02N 15/00','F03G 4/00','G06D 1/00','G04R 20/04','A24B 15/16','F41A 11/06','C21C 7/00','B60J 9/56','B32B 3/02','C10L 1/198','C09C 1/48','B26B 15/00',
+  'B61D 49/00','H10K 50/858','B01D 46/762','D06Q 15/01','C12S 171/50','B41F 11/00','B60C 35/58','C07C 69/00','B62C 3/00','F28B 7/00','C12S 183/00','A22B 3/06',
+  'C10H 41/00','E01D 101/00','B60V 21/20','D02H 67/08','B02B 3/00','B67B 6/00','A24F 19/02','B66F 13/00','C01C 30/90','B60Q 1/34','H04M 1/72436','G01K 5/20',
+  'F27D 7/00','C23F 1/04','A23L 3/06','C30B 9/58','G16H 40/00','H01M 2/00','C05C 3/00','E03B 7/07','C12C 12/00','B62K 21/22','E01D 19/12','C12M 3/00',
+  'D21J 1/08','E01H 5/04','F01M 1/16','G04C 1/08','D21J 1/08','B24B 37/28','C07H 305/00','C07F 9/10','F23K 3/00','C25F 7/00','D01C 3/02','C11B 5/00',
+  'D04B 35/00','C13F 1/08','D06M 11/50','F41G 26/00','F16F 17/044','C12J 65/21','B60F 5/00','G16B 40/10','H03F 3/387','A24F 40/42','H01B 3/30','F25B 41/00',
+  'G04G 21/06','B03B 5/68','B31B 70/52','B28B 11/06','A61M 60/898','C12M 1/107','A01H 15/65','C07F 49/517','F02C 7/05','B60T 8/54','A61J 19/00','D02J 1/00',
+  'H01J 31/54','G10C 9/00','H01K 3/02','G01Q 60/30','G10L 19/00','D07B 5/00','B60F 5/02','C14B 21/00','C12N 6/08','A63B 9/00','C11C 3/12','A01M 23/32',
+  'D07B 3/00','E05G 1/14','C25D 3/30','F15B 11/20','C12N 1/02','B41B 31/06','F26B 21/04','E01C 1/00','B41D 7/04','B29D 30/56','B61F 6/00','C22F 1/00',
+  'F02C 7/105','E05B 46/90','C12R 1/93','C07M 253/00','F28D 7/14','B41K 1/04','D01B 5/00','A47G 11/00','G04F 29/02','D21B 1/42','B62H 1/12','F16T 36/71',
+  'A61C 3/12','G02F 1/1368','C25C 3/22','A42C 5/02','G01R 29/04','B41J 2/19','D21H 23/02','B64C 11/18','H02N 27/01','A23K 10/20','F41F 7/00','H05C 1/04',
+  'B81B 5/00','G09B 27/14','A47D 1/10','F03D 13/10','B23C 5/00','D01H 15/00','G05D 111/67','C11B 7/00','D01F 2/08','C11D 31/10','B23P 13/00','G02F 1/025',
+  'B31B 15/66','E03B 11/00','B32B 38/04','C09F 1/04','B03D 1/08','G03D 5/00','B61D 23/00','B60L 7/04','C40B 30/10','B44C 5/06','D06L 4/15','H02G 3/78',
+  'B61F 3/00','B06B 17/00','F27B 21/00','G06K 9/68','F21M 11/00','D06C 7/00','D01D 13/00','B41D 7/04','A47F 3/00','A61D 27/00','A41B 5/00','E04D 1/18',
+  'B23C 3/32','C12Q 1/6823','H03K 19/18','H02N 3/00','H99Z 53/53','F17B 1/04','C05G 5/12','B62B 5/00','C12M 1/34','B61D 35/00','G10G 7/00','G01T 33/02',
+  'G06G 7/12','B61L 27/70','G08C 15/00','A01H 6/74','D99Z 36/53','B07B 21/51','C01G 51/06','D05C 13/00','F28B 46/72','C11B 5/00','B21J 3/00','B23C 9/00',
+  'H03D 1/00','G06J 11/07','F28B 11/00','G06G 1/14','F21S 3/12','C22F 1/00','E06C 7/02','A01H 6/66','C07G 99/00','F23L 11/04','A01L 9/00','C08K 3/012',
+  'H01F 17/14','B31C 3/00','B42B 2/00','B68C 7/02','D06M 11/50','F16S 1/00','F03H 5/00','C06B 84/240','C12M 1/00','F21V 9/40','G06M 217/00','D06F 77/06',
+  'D01G 3/36','B27K 5/04','B43M 9/00','H01F 99/00','F03C 2/08','A01B 49/04','B05D 7/04','H01H 19/20','D06N 7/00','F16K 39/76','C01G 53/56','H10W 90/24',
+  'F24B 1/04','A61Q 19/00','B64D 35/00','H04R 1/058','F01K 3/06','B28C 5/38','C09G 13/02','F41B 9/00','B33Y 13/68','B42B 4/00','F24B 1/187','A61F 2/90',
+  'C10G 1/238','B01J 38/60','C10F 7/06','A61K 36/539','D06N 7/00','G08G 5/06','C07B 85/240','G21F 17/10','F16J 15/3212','B43K 29/12','B05B 69/00','B44D 3/06',
+  'G01J 48/81','H02H 7/093','E06C 13/24','B02C 18/32','B63C 11/46','G01K 7/06','B63C 11/08','B60D 47/00','B61F 19/04','B60V 3/16','G01K 5/24','B60C 25/02',
+  'A63J 99/00','B23C 1/00','H03B 5/42','B27L 1/00','G03G 5/913','B03D 1/08','B41M 5/24','G01L 25/00','H10D 86/60','C06B 84/240','A23L 7/13','G16Y 10/25',
+  'A62B 3/24','B21F 9/00','H05C 1/04','H04R 19/04','A61K 33/34','B27H 5/00','C10N 173/00','F41C 5/14','B07C 19/28','A61N 1/18','A63B 51/06','B61J 1/06',
+  'C40B 40/12','A61D 89/01','C10J 1/26','A24F 1/10','G06M 1/30','F16J 17/06','C25B 11/34','D06H 122/240','G01Q 60/02','F02P 23/00','A23J 1/328','C10N 155/00',
+  'A01B 29/00','B44F 9/08','A61C 13/23','B67D 5/68','A63G 33/30','H04R 3/34','C03B 37/14','A63K 69/00','E06C 9/26','E02F 3/43','A63F 13/24','B23K 4/10',
+  'C03C 25/6208','C01G 51/05','F01C 21/06','B21C 23/04','B23G 9/00','A41H 1/00','C13F 1/12','H04H 60/89','C14C 3/00','F21M 3/24','B21F 23/00','B60G 17/01',
+  'D03D 49/36','D06H 3/16','C23F 1/34','F42B 35/00','G04R 60/06','F23L 10/30','H10W 70/60','B60T 15/36','B42D 25/364','G08G 5/90','G02B 6/293','F24B 3/00',
+  'E05G 1/026','E05B 85/16','B26D 5/34','D02J 7/00','B21C 3/08','D21G 1/02','B02B 1/00','H10N 59/00','G08G 1/0967','F22D 47/00','G06Q 40/06','B04B 7/16',
+  'C07F 15/18','F01L 31/08','C25F 5/00','C10C 3/12','E01D 21/08','H04S 5/00','F21V 31/18','B27G 7/02','B27L 3/00','G04G 99/00','D21D 23/24','G01F 1/20',
+  'A61H 4/70','C11D 18/67','C09K 8/035','B25D 15/00','G10K 11/168','G10K 1/36','F03D 11/04','B68F 13/00','C05D 1/00','C08G 18/44','A01K 2/46','B01J 49/60',
+  'F16H 1/16','F17C 5/00','F17D 1/04','B28B 9/40',
+];
+
+function runSimulation() {
+  const results = SAMPLE_CODES.map(code => {
+    const cls = code.substring(0, 3);
+    const c = CLASS_DATA.find(x => x.c === cls);
+    return {
+      code, cls,
+      action: c && c.a === 'has_changes' ? 'has_changes' : 'unchanged',
+      desc: c ? c.d : '',
+    };
+  });
+  window._simResults = results;
+
+  const changed = results.filter(r => r.action === 'has_changes').length;
+  const unchanged = results.length - changed;
+  const total = results.length;
+
+  document.getElementById('sim-stats').innerHTML = `
+    <div style="text-align:center;padding:12px;border-radius:8px;background:#e8f5e9">
+      <div style="font-size:1.5rem;font-weight:700;color:#2e7d32">${unchanged}</div>
+      <div style="font-size:0.72rem;color:#666">無異動 ${(unchanged/total*100).toFixed(1)}%</div>
+    </div>
+    <div style="text-align:center;padding:12px;border-radius:8px;background:#fff3e0">
+      <div style="font-size:1.5rem;font-weight:700;color:#e65100">${changed}</div>
+      <div style="font-size:0.72rem;color:#666">有異動 ${(changed/total*100).toFixed(1)}%</div>
+    </div>`;
+
+  // Bar by section
+  const sections = {};
+  results.forEach(r => {
+    const sec = r.cls[0];
+    if (!sections[sec]) sections[sec] = {total:0, changed:0};
+    sections[sec].total++;
+    if (r.action === 'has_changes') sections[sec].changed++;
+  });
+  document.getElementById('sim-bar').innerHTML = Object.entries(sections).sort().map(([sec, s]) => {
+    const pct = (s.changed / s.total * 100).toFixed(0);
+    const w = Math.max(s.changed / s.total * 100, 3);
+    return `<div style="display:flex;align-items:center;margin-bottom:4px">
+      <span style="width:30px;font-weight:600;font-size:0.85rem">${sec}</span>
+      <div style="flex:1;height:20px;background:#f0f0f0;border-radius:10px;overflow:hidden">
+        <div style="width:${w}%;height:100%;background:#ff9800;border-radius:10px"></div>
+      </div>
+      <span style="width:80px;text-align:right;font-size:0.78rem;color:#666">${s.changed}/${s.total} (${pct}%)</span>
+    </div>`;
+  }).join('');
+
+  simFilter('all');
+}
+
+let _simSection = 'all';
+function simFilter(sec) {
+  _simSection = sec;
+  ['all','A','B','C','D','E','F','G','H'].forEach(s => {
+    const btn = document.getElementById('sf-' + s);
+    if (btn) { if (s === sec) { btn.classList.add('active'); btn.style.background = btn.style.borderColor; } else { btn.classList.remove('active'); btn.style.background = '#fff'; } }
+  });
+  const all = window._simResults || [];
+  let filtered = sec === 'all' ? all : all.filter(r => r.cls.startsWith(sec));
+  filtered.sort((a,b) => (a.action==='has_changes'?0:1) - (b.action==='has_changes'?0:1));
+  const ch = filtered.filter(r => r.action === 'has_changes').length;
+  document.getElementById('sim-count').textContent = `${filtered.length} 筆（${ch} 有異動）`;
+  document.getElementById('sim-tbody').innerHTML = filtered.map((r, i) => {
+    const badge = r.action === 'has_changes' ? '<span class="badge badge-change">有異動</span>' : '<span class="badge badge-ok">無異動</span>';
+    return `<tr><td>${i+1}</td><td><code>${r.code}</code></td><td style="font-weight:600">${r.cls}</td><td style="font-size:0.78rem;color:#555">${r.desc}</td><td>${badge}</td></tr>`;
+  }).join('');
+}
+
+runSimulation();
+
 </script>
 </body>
 </html>
