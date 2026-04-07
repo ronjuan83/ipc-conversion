@@ -588,7 +588,7 @@ const initialIpc = getIpcFromUrl()
 const initialVer = getVerFromUrl()
 
 function AppInner() {
-  const { getSubclassName } = useIpcNames()
+  const { getSubclassName, loadGroupTitles } = useIpcNames()
   const [query, setQuery] = useState(initialIpc)
   const [input, setInput] = useState(initialIpc)
   const [data, setData] = useState(null)
@@ -617,6 +617,7 @@ function AppInner() {
         setFlowGraph(buildFlowGraph(d.subclass_index))
         if (g) setIpcGroups(g)
         setLoading(false)
+        if (initialIpc) loadGroupTitles() // preload if URL has query
       })
       .catch(e => { setError(e.message); setLoading(false) })
   }, [])
@@ -720,6 +721,7 @@ function AppInner() {
   function handleSearch(value) {
     const raw = (value !== undefined ? value : input).trim().toUpperCase()
     if (!raw) return
+    loadGroupTitles() // lazy load 7.8MB group titles on first search
     const v = isGroupQuery(raw) ? normalizeGroupQuery(raw) : raw
     setQuery(v)
     setInput(v)
@@ -853,14 +855,15 @@ function AppInner() {
               onFocus={() => suggestions.length > 0 && setShowSugg(true)}
               autoComplete="off"
               spellCheck={false}
+              aria-label="搜尋 IPC 分類代碼"
             />
-            <select className="version-select" value={selectedVersion} onChange={e => setSelectedVersion(e.target.value)}>
+            <select className="version-select" value={selectedVersion} onChange={e => setSelectedVersion(e.target.value)} aria-label="選擇 IPC 版本">
               <option value="">全部版本</option>
               {versionOptions.map(v => (
                 <option key={v} value={v}>{v}</option>
               ))}
             </select>
-            <button className="search-btn" onClick={() => handleSearch()} disabled={loading}>
+            <button className="search-btn" onClick={() => handleSearch()} disabled={loading} aria-label="搜尋">
               搜尋
             </button>
             {showSugg && suggestions.length > 0 && (

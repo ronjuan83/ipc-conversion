@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 
 const IpcNamesContext = createContext({
   subclassNames: {},
@@ -7,20 +7,26 @@ const IpcNamesContext = createContext({
   groupTitlesData: null,
   getSubclassName: () => '',
   getGroupTitle: () => '',
+  loadGroupTitles: () => {},
 })
 
 export function IpcNamesProvider({ children }) {
   const [subclassNames, setSubclassNames] = useState({})
   const [groupTitles, setGroupTitles] = useState({})
   const [groupTitlesZh, setGroupTitlesZh] = useState({})
-  const [groupTitlesData, setGroupTitlesData] = useState(null) // raw array for TechClassifier
+  const [groupTitlesData, setGroupTitlesData] = useState(null)
+  const groupTitlesLoaded = useRef(false)
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}ipc_names.json`)
       .then(r => r.ok ? r.json() : null)
       .then(n => { if (n) setSubclassNames(n) })
       .catch(() => {})
+  }, [])
 
+  const loadGroupTitles = useCallback(() => {
+    if (groupTitlesLoaded.current) return
+    groupTitlesLoaded.current = true
     fetch(`${import.meta.env.BASE_URL}ipc_group_titles.json`)
       .then(r => r.ok ? r.json() : null)
       .then(arr => {
@@ -62,7 +68,7 @@ export function IpcNamesProvider({ children }) {
   }, [groupTitles, groupTitlesZh])
 
   return (
-    <IpcNamesContext.Provider value={{ subclassNames, groupTitles, groupTitlesZh, groupTitlesData, getSubclassName, getGroupTitle }}>
+    <IpcNamesContext.Provider value={{ subclassNames, groupTitles, groupTitlesZh, groupTitlesData, getSubclassName, getGroupTitle, loadGroupTitles }}>
       {children}
     </IpcNamesContext.Provider>
   )

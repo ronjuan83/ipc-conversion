@@ -1123,6 +1123,16 @@ body {
   color: #e67e22;
 }
 
+/* ── Tablet ── */
+@media (max-width: 768px) {
+  .app-header { padding: 28px 0 18px; }
+  .app-title { font-size: 1.6rem; }
+  .card-header { flex-direction: column; gap: 8px; }
+  .flow-summary-ver { flex-direction: column; gap: 4px; }
+  .flow-summary-ver-label { min-width: unset; }
+  .tech-results-split { flex-direction: column; gap: 8px; }
+}
+
 /* ── Mobile ── */
 @media (max-width: 600px) {
   .app-title { font-size: 1.4rem; }
