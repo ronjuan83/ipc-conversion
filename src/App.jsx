@@ -92,7 +92,7 @@ function ReceivedSection({ received, onSearch, ipcGroups }) {
 }
 
 // Inline flow summary shown directly in SubclassCard
-function FlowSummary({ code, flowGraph, data, onSearch, activeVersionTransitions }) {
+function FlowSummary({ code, flowGraph, data, onSearch, activeVersionTransitions, directionFilter }) {
   if (!flowGraph) return null
   const isSubclass = /^[A-H]\d{2}[A-Z]$/.test(code)
   const rawFlow = isSubclass
@@ -105,7 +105,9 @@ function FlowSummary({ code, flowGraph, data, onSearch, activeVersionTransitions
     const fromSub = e.from.slice(0, 4)
     const toSub = e.to.slice(0, 4)
     const isRelevantSub = fromSub === originSub || toSub === originSub
-    return isRelevantSub && (!activeVersionTransitions || activeVersionTransitions.has(e.version))
+    return isRelevantSub &&
+      (!activeVersionTransitions || activeVersionTransitions.has(e.version)) &&
+      filterEdgeByDirection(e, originSub, directionFilter)
   })
   if (relevantEdges.length === 0) return null
 
@@ -173,13 +175,10 @@ function FlowSummary({ code, flowGraph, data, onSearch, activeVersionTransitions
   )
 }
 
-function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph, activeVersionTransitions, compareRange }) {
+function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph, activeVersionTransitions, compareRange, directionFilter }) {
   const { getSubclassName } = useIpcNames()
-  const entry = data.subclass_index[code] || {}
-  const allDonated = entry.donated || []
-  const allReceived = entry.received || []
-  const donated = activeVersionTransitions ? allDonated.filter(r => activeVersionTransitions.has(r.version)) : allDonated
-  const received = activeVersionTransitions ? allReceived.filter(r => activeVersionTransitions.has(r.version)) : allReceived
+  const summary = buildCodeScopeSummary(code, data, activeVersionTransitions, compareRange)
+  const { donated, received } = filterRecordsByDirection(summary.donated, summary.received, directionFilter)
   const name = getSubclassName(code)
   const intro = data.introduced_in[code]
   const depr = data.deprecated_to[code]
@@ -197,7 +196,9 @@ function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph, activeVersio
     const fromSub = e.from.slice(0, 4)
     const toSub = e.to.slice(0, 4)
     const isRelevantSub = fromSub === originSub || toSub === originSub
-    return isRelevantSub && (!activeVersionTransitions || activeVersionTransitions.has(e.version))
+    return isRelevantSub &&
+      (!activeVersionTransitions || activeVersionTransitions.has(e.version)) &&
+      filterEdgeByDirection(e, originSub, directionFilter)
   })
   const byVersion = {}
   relevantEdges.forEach(e => {
@@ -262,55 +263,57 @@ function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph, activeVersio
             <span>涵蓋 {activeVersionTransitions.size} 次版本轉換</span>
             <span>移出 {donated.length} 筆</span>
             <span>移入 {received.length} 筆</span>
+            <span>目前篩選：{DIRECTION_OPTIONS.find(option => option.value === directionFilter)?.label || '全部'}</span>
           </div>
         </div>
       )}
 
-      {viewTab === 'summary' && (
-        <FlowSummary code={code} flowGraph={flowGraph} data={data} onSearch={onSearch} activeVersionTransitions={activeVersionTransitions} />
-      )}
+      {!hasFlowData ? (
+        <div className="no-moves">
+          {directionFilter === 'unchanged' && summary.unchanged
+            ? '此分類在目前版本範圍內未出現跨分類異動。'
+            : '此分類在目前篩選條件下無符合的跨分類異動。'}
+        </div>
+      ) : (
+        <>
+          {viewTab === 'summary' && (
+            <FlowSummary code={code} flowGraph={flowGraph} data={data} onSearch={onSearch} activeVersionTransitions={activeVersionTransitions} directionFilter={directionFilter} />
+          )}
 
-      {viewTab === 'list' && (
-        donated.length === 0 && received.length === 0 ? (
-          <div className="no-moves">此分類在現有記錄中無跨分類異動。</div>
-        ) : (
-          <>
-            <DonatedSection donated={donated} onSearch={onSearch} ipcGroups={ipcGroups} />
-            <ReceivedSection received={received} onSearch={onSearch} ipcGroups={ipcGroups} />
-          </>
-        )
-      )}
+          {viewTab === 'list' && (
+            <>
+              <DonatedSection donated={donated} onSearch={onSearch} ipcGroups={ipcGroups} />
+              <ReceivedSection received={received} onSearch={onSearch} ipcGroups={ipcGroups} />
+            </>
+          )}
 
-      {viewTab === 'timeline' && (
-        <TimelineChart
-          sortedVersions={sortedVersions}
-          byVersion={byVersion}
-          originSub={originSub}
-          subColors={subColors}
-          expandedSections={expandedSections}
-          toggleSection={toggleSection}
-          onSearch={onSearch}
-          data={data}
-          ipcGroups={ipcGroups}
-        />
+          {viewTab === 'timeline' && (
+            <TimelineChart
+              sortedVersions={sortedVersions}
+              byVersion={byVersion}
+              originSub={originSub}
+              subColors={subColors}
+              expandedSections={expandedSections}
+              toggleSection={toggleSection}
+              onSearch={onSearch}
+              data={data}
+              ipcGroups={ipcGroups}
+            />
+          )}
+        </>
       )}
     </div>
   )
 }
 
 // Card for exact group-level code (4th/5th level)
-function GroupCard({ code, groupIndex, onSearch, ipcGroups, activeVersionTransitions, compareRange }) {
+function GroupCard({ code, groupIndex, onSearch, ipcGroups, activeVersionTransitions, compareRange, directionFilter }) {
   const { getSubclassName } = useIpcNames()
-  const entries = groupIndex[code] || []
   const subclass = code.slice(0, 4)
   const subclassName = getSubclassName(subclass)
 
-  const filteredEntries = activeVersionTransitions
-    ? entries.filter(e => activeVersionTransitions.has(e.record.version))
-    : entries
-
-  const donated = filteredEntries.filter(e => e.type === 'donated')
-  const received = filteredEntries.filter(e => e.type === 'received')
+  const summary = buildGroupScopeSummary(code, groupIndex, activeVersionTransitions)
+  const { donated, received } = filterRecordsByDirection(summary.donated, summary.received, directionFilter)
 
   const byVersionDonated = {}
   donated.forEach(e => {
@@ -349,6 +352,7 @@ function GroupCard({ code, groupIndex, onSearch, ipcGroups, activeVersionTransit
             <span>涵蓋 {activeVersionTransitions.size} 次版本轉換</span>
             <span>移出 {donated.length} 筆</span>
             <span>移入 {received.length} 筆</span>
+            <span>目前篩選：{DIRECTION_OPTIONS.find(option => option.value === directionFilter)?.label || '全部'}</span>
           </div>
         </div>
       )}
@@ -416,26 +420,39 @@ function GroupCard({ code, groupIndex, onSearch, ipcGroups, activeVersionTransit
       )}
 
       {donated.length === 0 && received.length === 0 && (
-        <div className="no-moves">此組號在現有記錄中無跨分類異動。</div>
+        <div className="no-moves">
+          {directionFilter === 'unchanged' && summary.unchanged
+            ? '此組號在目前版本範圍內未出現跨分類異動。'
+            : '此組號在目前篩選條件下無符合的 crosswalk 記錄。'}
+        </div>
       )}
     </div>
   )
 }
 
 // List for prefix group-level search
-function GroupList({ prefix, matches, groupIndex, onSelect }) {
+function GroupList({ prefix, matches, groupIndex, onSelect, activeVersionTransitions, directionFilter }) {
   if (matches.length === 0) {
     return <div className="no-result">找不到以「{prefix}」開頭的 IPC 組號。</div>
+  }
+
+  const visibleMatches = matches.filter(code => matchesDirectionFilter(
+    buildGroupScopeSummary(code, groupIndex, activeVersionTransitions),
+    directionFilter
+  ))
+
+  if (visibleMatches.length === 0) {
+    return <div className="no-result">目前篩選條件下，找不到以「{prefix}」開頭的 IPC 組號。</div>
   }
 
   return (
     <div className="prefix-results">
       <div className="prefix-header">
-        找到 {matches.length} 個以「{prefix}」開頭的組號：
+        找到 {visibleMatches.length} 個以「{prefix}」開頭的組號：
       </div>
       <div className="prefix-grid">
-        {matches.map(code => {
-          const entries = groupIndex[code] || []
+        {visibleMatches.map(code => {
+          const summary = buildGroupScopeSummary(code, groupIndex, activeVersionTransitions)
           return (
             <div
               key={code}
@@ -444,7 +461,9 @@ function GroupList({ prefix, matches, groupIndex, onSelect }) {
             >
               <div className="prefix-item-code">{code}</div>
               <div className="prefix-item-stats">
-                {entries.length > 0 && <span className="stat donated-stat">移出 {entries.length}</span>}
+                {summary.donated.length > 0 && <span className="stat donated-stat">移出 {summary.donated.length}</span>}
+                {summary.received.length > 0 && <span className="stat received-stat">移入 {summary.received.length}</span>}
+                {summary.unchanged && <span className="stat no-stat">本範圍無異動</span>}
               </div>
             </div>
           )
@@ -454,7 +473,7 @@ function GroupList({ prefix, matches, groupIndex, onSelect }) {
   )
 }
 
-function PrefixList({ prefix, data, onSearch, activeVersionTransitions }) {
+function PrefixList({ prefix, data, onSearch, activeVersionTransitions, compareRange, directionFilter }) {
   const { getSubclassName } = useIpcNames()
   // Merge all known subclass codes from subclass_index, introduced_in, and deprecated_to
   const allCodes = new Set([
@@ -462,22 +481,14 @@ function PrefixList({ prefix, data, onSearch, activeVersionTransitions }) {
     ...Object.keys(data.introduced_in || {}),
     ...Object.keys(data.deprecated_to || {})
   ])
-  let matches = [...allCodes]
+  const matches = [...allCodes]
     .filter(k => k.startsWith(prefix.toUpperCase()))
     .sort()
-
-  // Filter by active transition set if selected
-  if (activeVersionTransitions) {
-    matches = matches.filter(code => {
-      const entry = data.subclass_index[code]
-      if (!entry) return false
-      return (entry.donated || []).some(r => activeVersionTransitions.has(r.version)) ||
-             (entry.received || []).some(r => activeVersionTransitions.has(r.version))
-    })
-  }
+    .map(code => buildCodeScopeSummary(code, data, activeVersionTransitions, compareRange))
+    .filter(summary => matchesDirectionFilter(summary, directionFilter))
 
   if (matches.length === 0) {
-    return <div className="no-result">找不到以「{prefix}」開頭的 IPC 分類代碼。</div>
+    return <div className="no-result">目前篩選條件下，找不到以「{prefix}」開頭的 IPC 分類代碼。</div>
   }
 
   return (
@@ -486,14 +497,12 @@ function PrefixList({ prefix, data, onSearch, activeVersionTransitions }) {
         找到 {matches.length} 個以「{prefix.toUpperCase()}」開頭的分類代碼：
       </div>
       <div className="prefix-grid">
-        {matches.map(code => {
-          const entry = data.subclass_index[code] || {}
-          const donated = (entry.donated || []).length
-          const received = (entry.received || []).length
-          const depr = data.deprecated_to[code]
-          const intro = data.introduced_in[code]
+        {matches.map(summary => {
+          const code = summary.code
+          const donated = summary.donated.length
+          const received = summary.received.length
           return (
-            <div key={code} className={`prefix-item ${depr ? 'is-deprecated' : ''}`} onClick={() => onSearch(code)}>
+            <div key={code} className={`prefix-item ${summary.showDeprecated ? 'is-deprecated' : ''}`} onClick={() => onSearch(code)}>
               <div className="prefix-item-code">{code}</div>
               {getSubclassName(code) && (
                 <div className="prefix-item-name">{getSubclassName(code)}</div>
@@ -501,10 +510,10 @@ function PrefixList({ prefix, data, onSearch, activeVersionTransitions }) {
               <div className="prefix-item-stats">
                 {donated > 0 && <span className="stat donated-stat">捐出 {donated}</span>}
                 {received > 0 && <span className="stat received-stat">接收 {received}</span>}
-                {intro && <span className="stat intro-stat">新增</span>}
-                {depr && <span className="stat depr-stat">廢棄</span>}
-                {donated === 0 && received === 0 && !intro && !depr && (
-                  <span className="stat no-stat">無異動</span>
+                {summary.showIntro && <span className="stat intro-stat">新增</span>}
+                {summary.showDeprecated && <span className="stat depr-stat">廢棄</span>}
+                {summary.unchanged && (
+                  <span className="stat no-stat">本範圍無異動</span>
                 )}
               </div>
             </div>
@@ -602,7 +611,43 @@ function TimelineChart({ sortedVersions, byVersion, originSub, subColors, expand
   )
 }
 
+function ResultToolbar({ directionFilter, setDirectionFilter, onDownload, downloadDisabled }) {
+  return (
+    <div className="result-toolbar">
+      <div className="direction-filter-group">
+        <span className="direction-filter-label">方向篩選</span>
+        <div className="direction-filter-buttons">
+          {DIRECTION_OPTIONS.map(option => (
+            <button
+              key={option.value}
+              type="button"
+              className={`direction-filter-btn ${directionFilter === option.value ? 'active' : ''}`}
+              onClick={() => setDirectionFilter(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <button
+        type="button"
+        className="download-btn"
+        onClick={onDownload}
+        disabled={downloadDisabled}
+      >
+        下載目前結果 CSV
+      </button>
+    </div>
+  )
+}
+
 const EXAMPLES = ['H01L', 'B01J', 'G06K', 'B29D', 'H10B', 'B81B', 'G06Q', 'E21B', 'F24S', 'C40B']
+const DIRECTION_OPTIONS = [
+  { value: 'all', label: '全部' },
+  { value: 'out', label: '移出' },
+  { value: 'in', label: '移入' },
+  { value: 'unchanged', label: '未變動' },
+]
 
 function parseTransitionVersion(verStr) {
   const m = verStr.match(/(\d{4}\.\d{2})→(\d{4}\.\d{2})/)
@@ -614,6 +659,120 @@ function editionOrder(verStr) {
   const m = verStr.match(/(\d{4})\.(\d{2})/)
   if (!m) return 0
   return parseInt(m[1], 10) * 100 + parseInt(m[2], 10)
+}
+
+function getScopeWindow(activeVersionTransitions, compareRange) {
+  if (compareRange) return { from: compareRange.from, to: compareRange.to }
+  if (!activeVersionTransitions || activeVersionTransitions.size !== 1) return null
+  const only = [...activeVersionTransitions][0]
+  return parseTransitionVersion(only)
+}
+
+function isEditionWithinScope(edition, scope) {
+  if (!edition || !scope) return false
+  const value = editionOrder(edition)
+  return value > editionOrder(scope.from) && value <= editionOrder(scope.to)
+}
+
+function extractSubclasses(text) {
+  if (!text) return []
+  const matches = text.match(/[A-H]\d{2}[A-Z]/g)
+  return matches ? [...new Set(matches)] : []
+}
+
+function buildCodeScopeSummary(code, data, activeVersionTransitions, compareRange) {
+  const entry = data.subclass_index[code] || {}
+  const donated = activeVersionTransitions
+    ? (entry.donated || []).filter(r => activeVersionTransitions.has(r.version))
+    : (entry.donated || [])
+  const received = activeVersionTransitions
+    ? (entry.received || []).filter(r => activeVersionTransitions.has(r.version))
+    : (entry.received || [])
+
+  const intro = data.introduced_in[code]
+  const depr = data.deprecated_to[code]
+  const deprAt = data.deprecated_at && data.deprecated_at[code]
+  const scope = getScopeWindow(activeVersionTransitions, compareRange)
+  const showIntro = scope ? isEditionWithinScope(intro, scope) : Boolean(intro)
+  const showDeprecated = scope ? isEditionWithinScope(deprAt, scope) : Boolean(depr)
+
+  return {
+    code,
+    donated,
+    received,
+    intro,
+    depr,
+    deprAt,
+    showIntro,
+    showDeprecated,
+    unchanged: donated.length === 0 && received.length === 0 && !showIntro && !showDeprecated,
+  }
+}
+
+function buildGroupScopeSummary(code, groupIndex, activeVersionTransitions) {
+  const entries = groupIndex[code] || []
+  const filteredEntries = activeVersionTransitions
+    ? entries.filter(e => activeVersionTransitions.has(e.record.version))
+    : entries
+
+  const donated = filteredEntries.filter(e => e.type === 'donated')
+  const received = filteredEntries.filter(e => e.type === 'received')
+
+  return {
+    code,
+    entries: filteredEntries,
+    donated,
+    received,
+    unchanged: donated.length === 0 && received.length === 0,
+  }
+}
+
+function matchesDirectionFilter(summary, directionFilter) {
+  if (directionFilter === 'out') return summary.donated.length > 0
+  if (directionFilter === 'in') return summary.received.length > 0
+  if (directionFilter === 'unchanged') return summary.unchanged
+  return true
+}
+
+function filterRecordsByDirection(donated, received, directionFilter) {
+  if (directionFilter === 'out') return { donated, received: [] }
+  if (directionFilter === 'in') return { donated: [], received }
+  if (directionFilter === 'unchanged') return { donated: [], received: [] }
+  return { donated, received }
+}
+
+function filterEdgeByDirection(edge, originSub, directionFilter) {
+  if (directionFilter === 'all') return true
+  if (directionFilter === 'out') return edge.from.slice(0, 4) === originSub
+  if (directionFilter === 'in') return edge.to.slice(0, 4) === originSub
+  return false
+}
+
+function toCsv(rows) {
+  if (!rows || rows.length === 0) return ''
+  const columns = [...new Set(rows.flatMap(row => Object.keys(row)))]
+  const escape = value => {
+    const text = value == null ? '' : String(value)
+    if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`
+    return text
+  }
+  const header = columns.map(escape).join(',')
+  const body = rows.map(row => columns.map(col => escape(row[col])).join(',')).join('\n')
+  return `\ufeff${header}\n${body}`
+}
+
+function triggerCsvDownload(filename, rows) {
+  if (!rows || rows.length === 0) return
+  const csv = toCsv(rows)
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
 }
 
 // Read ?ipc= and ?ver= from URL
@@ -657,6 +816,7 @@ function AppInner() {
   const [suggestions, setSuggestions] = useState([])
   const [showSugg, setShowSugg] = useState(false)
   const [viewMode, setViewMode] = useState(initialMode)
+  const [directionFilter, setDirectionFilter] = useState('all')
   const [selectedVersion, setSelectedVersion] = useState(initialVer) // '' = all versions
   const [compareFrom, setCompareFrom] = useState(initialFrom)
   const [compareTo, setCompareTo] = useState(initialTo)
@@ -961,6 +1121,157 @@ function AppInner() {
     }
   }
 
+  const scopeLabel = compareRange
+    ? `${compareRange.from}→${compareRange.to}`
+    : activeVersionTransitions && activeVersionTransitions.size === 1
+      ? [...activeVersionTransitions][0]
+      : '全部版本'
+
+  const exportRows = (() => {
+    if (compareError || !result || !data || !groupIndex) return []
+
+    if (result.type === 'exact') {
+      const summary = buildCodeScopeSummary(result.code, data, activeVersionTransitions, compareRange)
+      if (directionFilter === 'unchanged') {
+        return summary.unchanged ? [{
+          query_type: 'subclass',
+          query_code: result.code,
+          query_name: getSubclassName(result.code),
+          scope: scopeLabel,
+          direction_filter: '未變動',
+          status: '未變動',
+        }] : []
+      }
+      const filtered = filterRecordsByDirection(summary.donated, summary.received, directionFilter)
+      return [
+        ...filtered.donated.map(rec => ({
+          query_type: 'subclass',
+          query_code: result.code,
+          query_name: getSubclassName(result.code),
+          scope: scopeLabel,
+          version: rec.version,
+          direction: '移出',
+          source_subclass: result.code,
+          source_code: rec.src_group,
+          target_subclass: extractSubclasses(rec.dst).join(' | '),
+          target_code: rec.dst,
+        })),
+        ...filtered.received.map(rec => ({
+          query_type: 'subclass',
+          query_code: result.code,
+          query_name: getSubclassName(result.code),
+          scope: scopeLabel,
+          version: rec.version,
+          direction: '移入',
+          source_subclass: rec.src_sub || rec.from?.slice(0, 4) || '',
+          source_code: rec.from,
+          target_subclass: result.code,
+          target_code: rec.dst,
+        })),
+      ]
+    }
+
+    if (result.type === 'group-exact') {
+      const summary = buildGroupScopeSummary(result.code, groupIndex, activeVersionTransitions)
+      if (directionFilter === 'unchanged') {
+        return summary.unchanged ? [{
+          query_type: 'group',
+          query_code: result.code,
+          scope: scopeLabel,
+          direction_filter: '未變動',
+          status: '未變動',
+        }] : []
+      }
+      const filtered = filterRecordsByDirection(summary.donated, summary.received, directionFilter)
+      return [
+        ...filtered.donated.map(item => ({
+          query_type: 'group',
+          query_code: result.code,
+          scope: scopeLabel,
+          version: item.record.version,
+          direction: '移出',
+          source_code: item.record.src_group,
+          target_code: item.record.dst,
+          target_subclass: extractSubclasses(item.record.dst).join(' | '),
+        })),
+        ...filtered.received.map(item => ({
+          query_type: 'group',
+          query_code: result.code,
+          scope: scopeLabel,
+          version: item.record.version,
+          direction: '移入',
+          source_code: item.record.from,
+          source_subclass: item.record.src_sub || item.record.from?.slice(0, 4) || '',
+          target_code: item.record.dst,
+          target_subclass: item.record.dst?.slice(0, 4) || '',
+        })),
+      ]
+    }
+
+    if (result.type === 'prefix') {
+      return [...new Set([
+        ...Object.keys(data.subclass_index),
+        ...Object.keys(data.introduced_in || {}),
+        ...Object.keys(data.deprecated_to || {}),
+      ])]
+        .filter(code => code.startsWith(result.prefix.toUpperCase()))
+        .sort()
+        .map(code => buildCodeScopeSummary(code, data, activeVersionTransitions, compareRange))
+        .filter(summary => matchesDirectionFilter(summary, directionFilter))
+        .map(summary => ({
+          query_type: 'subclass-prefix',
+          prefix: result.prefix.toUpperCase(),
+          code: summary.code,
+          name: getSubclassName(summary.code),
+          scope: scopeLabel,
+          donated_count: summary.donated.length,
+          received_count: summary.received.length,
+          introduced_in_scope: summary.showIntro ? summary.intro : '',
+          deprecated_at_scope: summary.showDeprecated ? summary.deprAt || '' : '',
+          deprecated_to: summary.showDeprecated ? (Array.isArray(summary.depr) ? summary.depr.join(' | ') : summary.depr || '') : '',
+          status: summary.unchanged
+            ? '未變動'
+            : [
+                summary.donated.length > 0 ? '移出' : '',
+                summary.received.length > 0 ? '移入' : '',
+                summary.showIntro ? '新增' : '',
+                summary.showDeprecated ? '廢棄' : '',
+              ].filter(Boolean).join(' | '),
+        }))
+    }
+
+    if (result.type === 'group-prefix') {
+      return result.matches
+        .filter(code => matchesDirectionFilter(buildGroupScopeSummary(code, groupIndex, activeVersionTransitions), directionFilter))
+        .map(code => {
+          const summary = buildGroupScopeSummary(code, groupIndex, activeVersionTransitions)
+          return {
+            query_type: 'group-prefix',
+            prefix: result.prefix,
+            code,
+            scope: scopeLabel,
+            donated_count: summary.donated.length,
+            received_count: summary.received.length,
+            status: summary.unchanged
+              ? '未變動'
+              : [
+                  summary.donated.length > 0 ? '移出' : '',
+                  summary.received.length > 0 ? '移入' : '',
+                ].filter(Boolean).join(' | '),
+          }
+        })
+    }
+
+    return []
+  })()
+
+  function handleDownloadResult() {
+    if (!result || exportRows.length === 0) return
+    const filename = `${query || 'ipc'}-${directionFilter}-${scopeLabel}.csv`
+      .replace(/[^\w.-]+/g, '_')
+    triggerCsvDownload(filename, exportRows)
+  }
+
   return (
     <>
     <nav className="site-nav">
@@ -1090,8 +1401,19 @@ function AppInner() {
               </div>
             </div>
           )}
+          {!loading && !error && !compareError && result && (
+            <ResultToolbar
+              directionFilter={directionFilter}
+              setDirectionFilter={setDirectionFilter}
+              onDownload={handleDownloadResult}
+              downloadDisabled={exportRows.length === 0}
+            />
+          )}
           {loading && <div className="loading">載入資料中…</div>}
           {error && <div className="error-msg">資料載入失敗：{error}</div>}
+          {!loading && !error && compareError && (
+            <div className="error-msg">{compareError}</div>
+          )}
           {!loading && !error && !query && (
             <div className="empty-state">
               <div className="empty-icon">🔍</div>
@@ -1101,20 +1423,22 @@ function AppInner() {
               </p>
             </div>
           )}
-          {!loading && !error && result && result.type === 'exact' && (
-            <SubclassCard code={result.code} data={data} onSearch={handleSearch} ipcGroups={ipcGroups} flowGraph={flowGraph} activeVersionTransitions={activeVersionTransitions} compareRange={compareRange} />
+          {!loading && !error && !compareError && result && result.type === 'exact' && (
+            <SubclassCard code={result.code} data={data} onSearch={handleSearch} ipcGroups={ipcGroups} flowGraph={flowGraph} activeVersionTransitions={activeVersionTransitions} compareRange={compareRange} directionFilter={directionFilter} />
           )}
-          {!loading && !error && result && result.type === 'prefix' && (
-            <PrefixList prefix={result.prefix} data={data} onSearch={handleSearch} activeVersionTransitions={activeVersionTransitions} />
+          {!loading && !error && !compareError && result && result.type === 'prefix' && (
+            <PrefixList prefix={result.prefix} data={data} onSearch={handleSearch} activeVersionTransitions={activeVersionTransitions} compareRange={compareRange} directionFilter={directionFilter} />
           )}
-          {!loading && !error && result && result.type === 'group-exact' && (
-            <GroupCard code={result.code} groupIndex={groupIndex} onSearch={handleSearch} ipcGroups={ipcGroups} activeVersionTransitions={activeVersionTransitions} compareRange={compareRange} />
+          {!loading && !error && !compareError && result && result.type === 'group-exact' && (
+            <GroupCard code={result.code} groupIndex={groupIndex} onSearch={handleSearch} ipcGroups={ipcGroups} activeVersionTransitions={activeVersionTransitions} compareRange={compareRange} directionFilter={directionFilter} />
           )}
-          {!loading && !error && result && result.type === 'group-prefix' && (
+          {!loading && !error && !compareError && result && result.type === 'group-prefix' && (
             <GroupList
               prefix={result.prefix}
               matches={result.matches}
               groupIndex={groupIndex}
+              activeVersionTransitions={activeVersionTransitions}
+              directionFilter={directionFilter}
               onSelect={code => { setInput(code); setQuery(code) }}
             />
           )}
