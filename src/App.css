@@ -613,6 +613,27 @@ body {
   color: var(--badge-depr-text);
 }
 
+.badge-transfer {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.badge-split {
+  background: #f5e9ff;
+  color: #6f42c1;
+}
+
+.badge-merge {
+  background: #e7f8ef;
+  color: #0f766e;
+}
+
+.depr-version {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 /* ── Info rows ── */
 .info-row {
   padding: 10px 20px;
@@ -639,6 +660,14 @@ body {
 .info-note {
   color: var(--text-muted);
   font-size: 0.83rem;
+}
+
+.card-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .compare-summary-card {
@@ -1198,11 +1227,6 @@ body {
 }
 
 /* ── Extracted inline styles ── */
-.card-header-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
 .group-card-badges {
   display: flex;
   gap: 6px;

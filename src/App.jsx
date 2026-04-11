@@ -226,7 +226,7 @@ function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph, activeVersio
           {name && <span className="subclass-name">{name}</span>}
         </div>
         <div className="card-header-actions">
-          <StatusBadge code={code} data={data} onSearch={onSearch} />
+          <StatusBadge code={code} data={data} onSearch={onSearch} activeVersionTransitions={activeVersionTransitions} compareRange={compareRange} />
           {hasFlowData && flowGraph && (
             <div className="sankey-toggle">
               <button className={`toggle-btn ${viewTab === 'summary' ? 'active' : ''}`} onClick={() => setViewTab('summary')}>摘要</button>
